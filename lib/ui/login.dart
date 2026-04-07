@@ -55,7 +55,7 @@ class _LoginPageState extends State<LoginPage> {
 				),
 				SizedBox(height: 20),
 				Text(
-					'VitalityFlow',
+					'PEYDAR',
 					style: TextStyle(
 						fontSize: 64 * 0.66,
 						fontWeight: FontWeight.w700,
