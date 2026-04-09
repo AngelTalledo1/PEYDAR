@@ -57,7 +57,7 @@ class _LoginPageState extends State<LoginPage> {
 				Text(
 					'PEYDAR',
 					style: TextStyle(
-						fontSize: 64 * 0.66,
+						fontSize: 45 * 0.66,
 						fontWeight: FontWeight.w700,
 						color: Color(0xFF003A93),
 						letterSpacing: -0.6,
@@ -65,9 +65,9 @@ class _LoginPageState extends State<LoginPage> {
 				),
 				SizedBox(height: 6),
 				Text(
-					'PURITY IN EVERY DROP',
+					'AGUA PURIFICADA',
 					style: TextStyle(
-						fontSize: 16,
+						fontSize: 12,
 						fontWeight: FontWeight.w500,
 						color: Color(0xFF2D3342),
 						letterSpacing: 2,
@@ -95,21 +95,24 @@ class _LoginPageState extends State<LoginPage> {
 			child: Column(
 				crossAxisAlignment: CrossAxisAlignment.start,
 				children: [
-					const Text(
-						'Welcome Back',
+					const Center(
+						child: Text(
+						'Bienvenido',
+						textAlign: TextAlign.center,
 						style: TextStyle(
-							fontSize: 50 * 0.66,
+							fontSize: 45 * 0.66,
 							fontWeight: FontWeight.w700,
 							color: Color(0xFF10141C),
 						),
+					),
 					),
 					const SizedBox(height: 22),
 					_buildRoleSelector(),
 					const SizedBox(height: 30),
 					const Text(
-						'EMAIL ADDRESS',
+						'USUARIO',
 						style: TextStyle(
-							fontSize: 15,
+							fontSize: 13,
 							fontWeight: FontWeight.w700,
 							color: Color(0xFF394053),
 							letterSpacing: 1.8,
@@ -124,11 +127,11 @@ class _LoginPageState extends State<LoginPage> {
 								Expanded(
 									child: TextField(
 										decoration: InputDecoration(
-											hintText: 'name@example.com',
+											hintText: 'Ingrese su usuario',
 											border: InputBorder.none,
 											hintStyle: TextStyle(
 												color: Color(0xFF727989),
-												fontSize: 28 * 0.66,
+												fontSize: 22 * 0.66,
 											),
 										),
 										keyboardType: TextInputType.emailAddress,
@@ -144,19 +147,11 @@ class _LoginPageState extends State<LoginPage> {
 								child: Text(
 									'PASSWORD',
 									style: TextStyle(
-										fontSize: 15,
+										fontSize: 13,
 										fontWeight: FontWeight.w700,
 										color: Color(0xFF394053),
 										letterSpacing: 1.8,
 									),
-								),
-							),
-							Text(
-								'Forgot?',
-								style: TextStyle(
-									color: Color(0xFF00328B),
-									fontSize: 35 * 0.42,
-									fontWeight: FontWeight.w700,
 								),
 							),
 						],
@@ -175,7 +170,7 @@ class _LoginPageState extends State<LoginPage> {
 											border: InputBorder.none,
 											hintStyle: TextStyle(
 												color: Color(0xFF727989),
-												fontSize: 30 * 0.66,
+												fontSize: 22 * 0.66,
 												letterSpacing: 2,
 											),
 										),
@@ -197,33 +192,12 @@ class _LoginPageState extends State<LoginPage> {
 							],
 						),
 					),
-					const SizedBox(height: 24),
+					const SizedBox(height: 0),
 					Row(
 						children: [
 							SizedBox(
 								height: 30,
 								width: 30,
-								child: Checkbox(
-									value: _staySignedIn,
-									onChanged: (value) {
-										setState(() {
-											_staySignedIn = value ?? false;
-										});
-									},
-									shape: RoundedRectangleBorder(
-										borderRadius: BorderRadius.circular(6),
-									),
-									side: const BorderSide(color: Color(0xFFAFB6C7), width: 2),
-								),
-							),
-							const SizedBox(width: 14),
-							const Text(
-								'Stay signed in for 30 days',
-								style: TextStyle(
-									color: Color(0xFF2E3446),
-									fontSize: 38 * 0.56,
-									fontWeight: FontWeight.w500,
-								),
 							),
 						],
 					),
@@ -245,7 +219,7 @@ class _LoginPageState extends State<LoginPage> {
 								mainAxisAlignment: MainAxisAlignment.center,
 								children: [
 									Text(
-										'Sign In to Account',
+										'Ingresar',
 										style: TextStyle(fontSize: 22 * 0.66, fontWeight: FontWeight.w700),
 									),
 									SizedBox(width: 14),
@@ -260,21 +234,6 @@ class _LoginPageState extends State<LoginPage> {
 					Row(
 						mainAxisAlignment: MainAxisAlignment.center,
 						children: const [
-							Text(
-								'Don\'t have an account yet? ',
-								style: TextStyle(
-									color: Color(0xFF2E3446),
-									fontSize: 20 * 0.66,
-								),
-							),
-							Text(
-								'Create Account',
-								style: TextStyle(
-									color: Color(0xFF00328B),
-									fontSize: 20 * 0.66,
-									fontWeight: FontWeight.w700,
-								),
-							),
 						],
 					),
 				],
@@ -293,7 +252,7 @@ class _LoginPageState extends State<LoginPage> {
 				children: [
 					Expanded(
 						child: _RoleButton(
-							text: 'Customer',
+							text: 'Cliente',
 							active: _isCustomer,
 							onTap: () {
 								setState(() {
@@ -324,24 +283,14 @@ class _LoginPageState extends State<LoginPage> {
 			child: Row(
 				mainAxisAlignment: MainAxisAlignment.center,
 				children: [
-					Text(
-						'Privacy Policy',
-						style: TextStyle(color: Color(0xFF7D8596), fontSize: 34 * 0.5),
-					),
+					
 					SizedBox(width: 20),
 					Text('•', style: TextStyle(color: Color(0xFFB0B7C6), fontSize: 16)),
 					SizedBox(width: 20),
-					Text(
-						'Terms of Service',
-						style: TextStyle(color: Color(0xFF7D8596), fontSize: 34 * 0.5),
-					),
+					
 					SizedBox(width: 20),
 					Text('•', style: TextStyle(color: Color(0xFFB0B7C6), fontSize: 16)),
 					SizedBox(width: 20),
-					Text(
-						'Support',
-						style: TextStyle(color: Color(0xFF7D8596), fontSize: 34 * 0.5),
-					),
 				],
 			),
 		);

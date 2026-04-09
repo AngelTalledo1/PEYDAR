@@ -10,544 +10,47 @@ class PeydarApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Peydar',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'Poppins',
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1A2F6B)),
-        useMaterial3: true,
-      ),
-      home: const RealizarPedidoScreen(),
+      theme: ThemeData(useMaterial3: true, fontFamily: 'sans-serif'),
+      home: const MainNavigation(),
     );
   }
 }
 
-class RealizarPedidoScreen extends StatefulWidget {
-  const RealizarPedidoScreen({super.key});
+class MainNavigation extends StatefulWidget {
+  const MainNavigation({super.key});
 
   @override
-  State<RealizarPedidoScreen> createState() => _RealizarPedidoScreenState();
+  State<MainNavigation> createState() => _MainNavigationState();
 }
 
-class _RealizarPedidoScreenState extends State<RealizarPedidoScreen> {
-  int _qtyCarga = 0;
-  int _qtyCompra = 0;
-  int _selectedNavIndex = 0;
+class _MainNavigationState extends State<MainNavigation> {
+  int _selectedIndex = 0;
 
-  final TextEditingController _direccionController = TextEditingController();
-  final TextEditingController _telefonoController = TextEditingController();
-
-  static const Color _darkNavy = Color(0xFF1A2F6B);
-  static const Color _lightBg = Color(0xFFEFF4F9);
-  static const Color _cyan = Color(0xFF6DD5ED);
-  static const Color _cardBg = Color(0xFFFFFFFF);
-
-  @override
-  void dispose() {
-    _direccionController.dispose();
-    _telefonoController.dispose();
-    super.dispose();
-  }
+  final List<Widget> _screens = [
+    const RealizarPedidoScreen(),
+    const MisPedidosScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _lightBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 16),
-                    _buildTopBar(),
-                    const SizedBox(height: 30),
-                    _buildTitle(),
-                    const SizedBox(height: 24),
-                    _buildRecargaCard(),
-                    const SizedBox(height: 14),
-                    _buildCompraInicialCard(),
-                    const SizedBox(height: 28),
-                    _buildDeliverySection(),
-                    const SizedBox(height: 28),
-                    _buildResumenButton(),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-            ),
-            _buildBottomNavBar(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopBar() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.water_drop, color: Color(0xFF3578C4), size: 26),
-            const SizedBox(width: 8),
-            const Text(
-              'PEYDAR',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: _darkNavy,
-              ),
-            ),
-          ],
-        ),
-        IconButton(
-          icon: const Icon(Icons.notifications_outlined,
-              color: _darkNavy, size: 26),
-          onPressed: () {},
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTitle() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Realizar pedido',
-          style: TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.w900,
-            color: _darkNavy,
-            height: 1.1,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Hidratación directo a tu puerta.',
-          style: TextStyle(
-            fontSize: 15,
-            color: Colors.grey[600],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecargaCard() {
-    return _buildProductCard(
-      badgeText: 'ECONÓMICO',
-      badgeColor: const Color(0xFFE8EAF6),
-      badgeTextColor: _darkNavy,
-      iconBgColor: _cyan,
-      icon: Icons.refresh,
-      iconColor: Colors.white,
-      title: 'Recarga de Bidones',
-      subtitle: 'Intercambia tus envases vacíos de 20L por unos llenos y frescos.',
-      quantity: _qtyCarga,
-      onDecrement: () {
-        if (_qtyCarga > 0) setState(() => _qtyCarga--);
-      },
-      onIncrement: () => setState(() => _qtyCarga++),
-      hasBottleImage: true,
-    );
-  }
-
-  Widget _buildCompraInicialCard() {
-    return _buildProductCard(
-      badgeText: 'NUEVO',
-      badgeColor: const Color(0xFFB2EBF2),
-      badgeTextColor: const Color(0xFF006064),
-      iconBgColor: _cyan,
-      icon: Icons.verified,
-      iconColor: Colors.white,
-      title: 'Compra de Bidones',
-      subtitle: 'Incluye el envase de 20L nuevo + agua mineral purificada.',
-      quantity: _qtyCompra,
-      onDecrement: () {
-        if (_qtyCompra > 0) setState(() => _qtyCompra--);
-      },
-      onIncrement: () => setState(() => _qtyCompra++),
-      hasBottleImage: true,
-    );
-  }
-
-  Widget _buildProductCard({
-    required String badgeText,
-    required Color badgeColor,
-    required Color badgeTextColor,
-    required Color iconBgColor,
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required int quantity,
-    required VoidCallback onDecrement,
-    required VoidCallback onIncrement,
-    required bool hasBottleImage,
-  }) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Bottle watermark image (right side)
-          if (hasBottleImage)
-            Positioned(
-              right: 0,
-              bottom: 0,
-              top: 60,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(20),
-                  bottomRight: Radius.circular(20),
-                ),
-                child: Container(
-                  width: 100,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.white,
-                        const Color(0xFFE8F4FB).withOpacity(0.6),
-                      ],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ),
-                  ),
-                  child: CustomPaint(
-                    painter: _BottlePainter(),
-                  ),
-                ),
-              ),
-            ),
-          // Main content
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top row: icon + badge
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: iconBgColor,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(icon, color: iconColor, size: 24),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: badgeColor,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        badgeText,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: badgeTextColor,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: _darkNavy,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                SizedBox(
-                  width: 220,
-                  child: Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[600],
-                      height: 1.45,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    _buildQuantityBtn(
-                      icon: Icons.remove,
-                      filled: false,
-                      onTap: onDecrement,
-                    ),
-                    SizedBox(
-                      width: 52,
-                      child: Center(
-                        child: Text(
-                          '$quantity',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: _darkNavy,
-                          ),
-                        ),
-                      ),
-                    ),
-                    _buildQuantityBtn(
-                      icon: Icons.add,
-                      filled: true,
-                      onTap: onIncrement,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuantityBtn({
-    required IconData icon,
-    required bool filled,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
+      body: _screens[_selectedIndex],
+      bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: filled ? _darkNavy : Colors.white,
-          shape: BoxShape.circle,
-          border: filled
-              ? null
-              : Border.all(color: Colors.grey[300]!, width: 1.5),
-          boxShadow: filled
-              ? [
-                  BoxShadow(
-                    color: _darkNavy.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  )
-                ]
-              : [],
+          color: Colors.white,
+          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
         ),
-        child: Icon(
-          icon,
-          color: filled ? Colors.white : _darkNavy,
-          size: 20,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDeliverySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.local_shipping, color: Color(0xFF2E7D6B), size: 24),
-            const SizedBox(width: 10),
-            const Text(
-              'Información de Entrega',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: _darkNavy,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        _buildFieldLabel('DIRECCIÓN DE ENTREGA'),
-        const SizedBox(height: 8),
-        _buildTextField(
-          controller: _direccionController,
-          hint: 'Calle, número, departamento',
-          icon: Icons.location_on_outlined,
-        ),
-        const SizedBox(height: 16),
-        _buildFieldLabel('NÚMERO DE TELÉFONO'),
-        const SizedBox(height: 8),
-        _buildTextField(
-          controller: _telefonoController,
-          hint: '+51 ',
-          icon: Icons.phone_outlined,
-          keyboardType: TextInputType.phone,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFieldLabel(String text) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: Colors.grey[500],
-        letterSpacing: 1.2,
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 254, 254, 254),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        style: const TextStyle(
-          fontSize: 14,
-          color: _darkNavy,
-        ),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(
-            color: Colors.grey[400],
-            fontSize: 14,
-          ),
-          prefixIcon: Icon(icon, color: Colors.grey[400], size: 20),
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResumenButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: () {},
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _darkNavy,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(50),
-          ),
-          elevation: 0,
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Resumen del Pedido',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.2,
-              ),
-            ),
-            SizedBox(width: 10),
-            Icon(Icons.arrow_forward, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem(
-            icon: Icons.local_drink,
-            label: 'Realizar pedido',
-            index: 0,
-          ),
-          _buildNavItem(
-            icon: Icons.history,
-            label: 'Ver mis pedidos',
-            index: 1,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required IconData icon,
-    required String label,
-    required int index,
-  }) {
-    final bool isActive = _selectedNavIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedNavIndex = index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: isActive
-            ? const EdgeInsets.symmetric(horizontal: 20, vertical: 10)
-            : const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFE8EFF8) : Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: isActive ? _darkNavy : Colors.grey[400],
-              size: 22,
-            ),
-            if (isActive) ...[
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: _darkNavy,
-                ),
-              ),
-            ],
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) => setState(() => _selectedIndex = index),
+          selectedItemColor: const Color(0xFF003DA5),
+          unselectedItemColor: Colors.grey,
+          showUnselectedLabels: true,
+          type: BottomNavigationBarType.fixed,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.delete_outline), label: 'Realizar pedido'),
+            BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Ver mis pedidos'),
           ],
         ),
       ),
@@ -555,94 +58,301 @@ class _RealizarPedidoScreenState extends State<RealizarPedidoScreen> {
   }
 }
 
-// Painter para simular la silueta del bidón de agua
-class _BottlePainter extends CustomPainter {
+// --- PANTALLA 1: REALIZAR PEDIDO ---
+class RealizarPedidoScreen extends StatelessWidget {
+  const RealizarPedidoScreen({super.key});
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFFCDE8F5).withOpacity(0.45)
-      ..style = PaintingStyle.fill;
-
-    final cx = size.width * 0.55;
-    final bottleWidth = size.width * 0.52;
-    final bottleHeight = size.height * 0.72;
-    final top = size.height * 0.1;
-
-    // Cap
-    final capRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(cx, top + 10),
-        width: bottleWidth * 0.45,
-        height: 18,
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: _buildAppBar(),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Realizar pedido', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF002855))),
+            const Text('Hidratación directo a tu puerta.', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 25),
+            
+            _buildSectionCard(
+              title: 'Recarga de Bidones',
+              tag: 'ECONÓMICO',
+              icon: Icons.refresh,
+              isHighlight: true,
+              subtitle: 'Intercambia tus envases vacíos de 20L.',
+              items: ['Bidón Azul', 'Bidón Celeste'],
+            ),
+            const SizedBox(height: 20),
+            
+            _buildSectionCard(
+              title: 'Compra de Bidones',
+              tag: 'NUEVO',
+              icon: Icons.verified_user_outlined,
+              isHighlight: true,
+              subtitle: 'Incluye el envase de 20L nuevo + agua.',
+              items: ['Bidón Azul', 'Bidón Celeste'],
+            ),
+            const SizedBox(height: 25),
+            
+            _buildDeliveryInfo(),
+            const SizedBox(height: 30),
+            
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {},
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF003DA5),
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('Resumen del Pedido', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                    SizedBox(width: 0),
+                    Icon(Icons.arrow_forward, color: Colors.white),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-      const Radius.circular(4),
     );
-    canvas.drawRRect(capRect, paint);
-
-    // Neck
-    final neckRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(cx, top + 26),
-        width: bottleWidth * 0.35,
-        height: 20,
-      ),
-      const Radius.circular(4),
-    );
-    canvas.drawRRect(neckRect, paint);
-
-    // Body
-    final bodyPath = Path()
-      ..moveTo(cx - bottleWidth * 0.28, top + 36)
-      ..quadraticBezierTo(
-        cx - bottleWidth * 0.5,
-        top + 50,
-        cx - bottleWidth * 0.5,
-        top + 80,
-      )
-      ..lineTo(cx - bottleWidth * 0.5, top + bottleHeight - 20)
-      ..quadraticBezierTo(
-        cx - bottleWidth * 0.5,
-        top + bottleHeight,
-        cx - bottleWidth * 0.3,
-        top + bottleHeight,
-      )
-      ..lineTo(cx + bottleWidth * 0.3, top + bottleHeight)
-      ..quadraticBezierTo(
-        cx + bottleWidth * 0.5,
-        top + bottleHeight,
-        cx + bottleWidth * 0.5,
-        top + bottleHeight - 20,
-      )
-      ..lineTo(cx + bottleWidth * 0.5, top + 80)
-      ..quadraticBezierTo(
-        cx + bottleWidth * 0.5,
-        top + 50,
-        cx + bottleWidth * 0.28,
-        top + 36,
-      )
-      ..close();
-
-    canvas.drawPath(bodyPath, paint);
-
-    // Water fill inside bottle
-    final waterPaint = Paint()
-      ..color = const Color(0xFF90CAF9).withOpacity(0.3)
-      ..style = PaintingStyle.fill;
-
-    final waterPath = Path()
-      ..moveTo(cx - bottleWidth * 0.48, top + 120)
-      ..quadraticBezierTo(cx, top + 110, cx + bottleWidth * 0.48, top + 120)
-      ..lineTo(cx + bottleWidth * 0.48, top + bottleHeight - 22)
-      ..quadraticBezierTo(
-          cx + bottleWidth * 0.48, top + bottleHeight - 5, cx + bottleWidth * 0.28, top + bottleHeight - 2)
-      ..lineTo(cx - bottleWidth * 0.28, top + bottleHeight - 2)
-      ..quadraticBezierTo(
-          cx - bottleWidth * 0.48, top + bottleHeight - 5, cx - bottleWidth * 0.48, top + bottleHeight - 22)
-      ..close();
-
-    canvas.drawPath(waterPath, waterPaint);
   }
 
+  Widget _buildSectionCard({required String title, required String tag, required IconData icon, required String subtitle, required List<String> items, bool isHighlight = false}) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: isHighlight ? Border.all(color: Colors.blue.shade200, width: 2) : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(backgroundColor: Colors.blue.shade50, child: Icon(icon, color: Colors.blue)),
+              const SizedBox(width: 12),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
+                child: Text(tag, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          const SizedBox(height: 15),
+          ...items.map((item) => _buildCounterItem(item)).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCounterItem(String name) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+        decoration: BoxDecoration(color: const Color(0xFFF1F4F8), borderRadius: BorderRadius.circular(15)),
+        child: Row(
+          children: [
+            Container(width: 4, height: 20, color: Colors.blue),
+            const SizedBox(width: 10),
+            Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w600))),
+            const Icon(Icons.remove_circle_outline, color: Colors.grey),
+            const Padding(padding: EdgeInsets.symmetric(horizontal: 15), child: Text('0', style: TextStyle(fontWeight: FontWeight.bold))),
+            const Icon(Icons.add_circle, color: Color(0xFF002855)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeliveryInfo() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFFF1F4F8), borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.local_shipping, color: Color(0xFF002855)),
+              SizedBox(width: 10),
+              Text('Información de Entrega', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 15),
+          _buildSmallField('DIRECCIÓN DE ENTREGA', 'Calle, número, departamento', Icons.location_on),
+          const SizedBox(height: 15),
+          _buildSmallField('NÚMERO DE TELÉFONO', '+51', Icons.phone),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSmallField(String label, String hint, IconData icon) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+        const SizedBox(height: 5),
+        TextField(
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, size: 18),
+            hintText: hint,
+            filled: true,
+            fillColor: Colors.white70,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// --- PANTALLA 2: MIS PEDIDOS ---
+class MisPedidosScreen extends StatelessWidget {
+  const MisPedidosScreen({super.key});
+
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: _buildAppBar(),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Mis Pedidos', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF002855))),
+            const Text('Gestiona tus entregas de agua y recargas activas.', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 25),
+            
+            const Text('PEDIDO EN CURSO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF003DA5), letterSpacing: 1)),
+            const SizedBox(height: 15),
+            
+            _buildActiveOrderCard(),
+            const SizedBox(height: 30),
+            
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('HISTORIAL RECIENTE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black54)),
+                TextButton.icon(onPressed: () {}, icon: const Icon(Icons.filter_list, size: 18), label: const Text('Filtros')),
+              ],
+            ),
+            _buildHistoryItem('5 Recargas + 1 Dispensador', '\$42.50', 'ENTREGADO', Colors.green),
+            _buildHistoryItem('2 Recargas de 20L', '\$18.00', 'ENTREGADO', Colors.green),
+            _buildHistoryItem('1 Botellón Extra', '\$9.00', 'CANCELADO', Colors.red),
+            
+            const SizedBox(height: 20),
+            Center(
+              child: OutlinedButton(
+                onPressed: () {},
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                  side: const BorderSide(color: Colors.blue),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                ),
+                child: const Text('Cargar más pedidos'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveOrderCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFF0052D4), Color(0xFF003DA5)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(25),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20)),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [Icon(Icons.local_shipping, color: Colors.white, size: 14), SizedBox(width: 5), Text('En camino', style: TextStyle(color: Colors.white, fontSize: 12))],
+            ),
+          ),
+          const SizedBox(height: 15),
+          const Text('3 Recargas de 20L', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+          const Text('Llega hoy, aprox. 14:30 - 15:00', style: TextStyle(color: Colors.white70)),
+          const SizedBox(height: 20),
+          ElevatedButton(onPressed: () {}, style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.blue), child: const Text('Ver Mapa')),
+          const Divider(height: 40, color: Colors.white24),
+          Row(
+            children: [
+              const CircleAvatar(backgroundColor: Colors.black26, child: Icon(Icons.person, color: Colors.white)),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Repartidor asignado', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text('Carlos Mendoza', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ]),
+              ),
+              CircleAvatar(backgroundColor: Colors.white24, child: IconButton(icon: const Icon(Icons.phone, color: Colors.white), onPressed: () {})),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryItem(String title, String price, String status, Color statusColor) {
+    return Container(
+      margin: const EdgeInsets.only(top: 15),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12)),
+            child: Icon(status == 'CANCELADO' ? Icons.block : Icons.water_drop, color: statusColor),
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              const Text('ID: #AF-88219 • 12 Oct, 2023', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              const SizedBox(height: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(5)),
+                child: Text(status, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+              )
+            ]),
+          ),
+          Text(price, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+}
+
+AppBar _buildAppBar() {
+  return AppBar(
+    backgroundColor: Colors.white,
+    elevation: 0,
+    leading: const Padding(padding: EdgeInsets.all(8.0), child: CircleAvatar(backgroundColor: Color(0xFFE3F2FD), child: Icon(Icons.water_drop, color: Color(0xFF003DA5), size: 18))),
+    title: const Text('PEYDAR', style: TextStyle(color: Color(0xFF003DA5), fontWeight: FontWeight.bold)),
+    actions: [IconButton(onPressed: () {}, icon: const Icon(Icons.notifications_none, color: Color(0xFF002855)))],
+  );
 }
