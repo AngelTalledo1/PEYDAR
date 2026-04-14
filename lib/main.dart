@@ -1,25 +1,33 @@
 import 'package:flutter/material.dart';
-
 import 'ui/login.dart';
+import 'ui/menuAdm.dart';
+import 'ui/iniciocliente.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const PeydarApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class PeydarApp extends StatelessWidget {
+  const PeydarApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'PEYDAR',
       debugShowCheckedModeBanner: false,
-      title: 'VitalityFlow',
       theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFFD7E6F2),
-        fontFamily: 'Roboto',
+        fontFamily: 'sans-serif',
         useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF003A93),
+        ),
       ),
-      home: const LoginPage(),
+      initialRoute: '/login',
+      routes: {
+        '/login':   (context) => const LoginPage(),
+        '/admin':   (context) => const MenuAdm(),
+        '/cliente': (context) => const InicioCliente(),
+      },
     );
   }
 }
