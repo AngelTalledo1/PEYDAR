@@ -39,7 +39,6 @@ class GestionPedidosScreen extends StatelessWidget {
         title: Text('Pedidos', 
           style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold, fontSize: 18)),
         centerTitle: false,
-        // Foto del admin eliminada
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
