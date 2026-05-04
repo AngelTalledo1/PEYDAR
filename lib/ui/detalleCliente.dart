@@ -1,30 +1,93 @@
 import 'package:flutter/material.dart';
+import 'package:apppeydar/services/order_service.dart';
+import 'package:apppeydar/ui/detalle_pedido.dart';
 
-void main() {
-  runApp(const PeydarAdminApp());
-}
+class PerfilClienteInfoScreen extends StatefulWidget {
+  const PerfilClienteInfoScreen({super.key, this.cliente});
 
-class PeydarAdminApp extends StatelessWidget {
-  const PeydarAdminApp({super.key});
+  final Map<String, dynamic>? cliente;
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true, fontFamily: 'sans-serif'),
-      home: const PerfilClienteInfoScreen(),
-    );
-  }
+  State<PerfilClienteInfoScreen> createState() => _PerfilClienteInfoScreenState();
 }
 
-class PerfilClienteInfoScreen extends StatelessWidget {
-  const PerfilClienteInfoScreen({super.key});
+class _PerfilClienteInfoScreenState extends State<PerfilClienteInfoScreen> {
+  List<Map<String, dynamic>> _pedidos = [];
+  bool _loading = true;
+
+  Map<String, dynamic>? get cliente => widget.cliente;
 
   // Colores corporativos PEYDAR
   final Color primaryBlue = const Color(0xFF003DA5);
   final Color backgroundGrey = const Color(0xFFF8FAFC);
   final Color textNavy = const Color(0xFF002855);
   final Color cyanAccent = const Color(0xFF4DD0E1);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPedidos();
+  }
+
+  String _formatDateShort(String raw) {
+    if (raw.isEmpty) return raw;
+    try {
+      final dt = DateTime.parse(raw).toLocal();
+      return '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return raw.length >= 10 ? raw.substring(0, 10) : raw;
+    }
+  }
+
+  Future<void> _loadPedidos() async {
+    setState(() => _loading = true);
+    try {
+      final uid = cliente?['usuario_id'] ?? cliente?['id'] ?? cliente?['usuario'];
+      if (uid != null) {
+        final int? usuarioId = int.tryParse(uid.toString());
+        if (usuarioId != null) {
+          final list = await OrderService.obtenerPedidos(usuarioId);
+          setState(() => _pedidos = list);
+        } else if (cliente?['pedidos'] is List) {
+          setState(() => _pedidos = List<Map<String, dynamic>>.from(cliente!['pedidos']));
+        } else {
+          setState(() => _pedidos = []);
+        }
+      } else if (cliente?['pedidos'] is List) {
+        setState(() => _pedidos = List<Map<String, dynamic>>.from(cliente!['pedidos']));
+      } else {
+        setState(() => _pedidos = []);
+      }
+    } catch (_) {
+      setState(() => _pedidos = cliente?['pedidos'] is List ? List<Map<String, dynamic>>.from(cliente!['pedidos']) : []);
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  String _computeLastInteraction() {
+    if (_pedidos.isEmpty) return cliente?['last_interaction']?.toString() ?? 'sin interacción';
+    try {
+      DateTime? latest;
+      for (final p in _pedidos) {
+        final f = (p['fecha'] ?? p['fecha_pedido'] ?? p['created_at'] ?? '').toString();
+        if (f.isEmpty) continue;
+        try {
+          final dt = DateTime.parse(f).toLocal();
+          if (latest == null || dt.isAfter(latest)) latest = dt;
+        } catch (_) {}
+      }
+      if (latest == null) return cliente?['last_interaction']?.toString() ?? 'sin interacción';
+      final diff = DateTime.now().difference(latest).inDays;
+      if (diff == 0) return 'hoy';
+      if (diff == 1) return 'hace 1 día';
+      return 'hace $diff días';
+    } catch (_) {
+      return cliente?['last_interaction']?.toString() ?? 'sin interacción';
+    }
+  }
+
+  int _totalPedidos() => _pedidos.length;
 
   @override
   Widget build(BuildContext context) {
@@ -35,11 +98,9 @@ class PerfilClienteInfoScreen extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: primaryBlue),
-          onPressed: () {},
+          onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('Gestión de Clientes', 
-          style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold, fontSize: 18)),
-        // Foto del admin eliminada de los actions
+        title: Text('Gestión de Clientes', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold, fontSize: 18)),
         centerTitle: false,
       ),
       body: SingleChildScrollView(
@@ -47,7 +108,6 @@ class PerfilClienteInfoScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // SECCIÓN DE INFORMACIÓN PERSONAL (Sin foto)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -62,23 +122,26 @@ class PerfilClienteInfoScreen extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Ricardo Alarcón', 
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textNavy)),
-                      _buildBadge('ACTIVO', Colors.green.shade50, Colors.green.shade700),
+                      Builder(builder: (_) {
+                        final nombre = (cliente?['nombre'] ?? '')?.toString() ?? '';
+                        final apellido = (cliente?['apellido'] ?? '')?.toString() ?? '';
+                        final displayName = (nombre.isNotEmpty || apellido.isNotEmpty) ? '$nombre $apellido' : 'Cliente ${cliente?['usuario_id'] ?? ''}';
+                        return Text(displayName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textNavy));
+                      }),
+                      _buildBadge((cliente?['estado'] ?? 'ACTIVO').toString().toUpperCase(), Colors.green.shade50, Colors.green.shade700),
                     ],
                   ),
                   const SizedBox(height: 15),
-                  _buildInfoRow(Icons.badge_outlined, 'DNI', '32.455.901'),
+                  _buildInfoRow(Icons.badge_outlined, 'DNI', (cliente?['dni'] ?? cliente?['documento'] ?? '-').toString()),
                   const SizedBox(height: 10),
-                  _buildInfoRow(Icons.phone_android, 'TELÉFONO', '+54 9 11 5822-4910'),
+                  _buildInfoRow(Icons.phone_android, 'TELÉFONO', (cliente?['telefono'] ?? cliente?['celular'] ?? '-').toString()),
                   const SizedBox(height: 10),
-                  _buildInfoRow(Icons.email_outlined, 'TIPO', 'CLIENTE PREMIUM'),
+                  _buildInfoRow(Icons.email_outlined, 'TIPO', (cliente?['tipo'] ?? 'CLIENTE').toString()),
                 ],
               ),
             ),
             const SizedBox(height: 25),
 
-            // TARJETA DE MÉTRICAS
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(25),
@@ -93,32 +156,60 @@ class PerfilClienteInfoScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  const Text('RESUMEN DE ACTIVIDAD', 
-                    style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  const Text('RESUMEN DE ACTIVIDAD', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                   const SizedBox(height: 10),
-                  const Text('48 Pedidos Totales', 
-                    style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                  Text('${_totalPedidos()} Pedidos Totales', style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 5),
-                  Text('Última interacción: hace 3 días', 
-                    style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13)),
+                  Text('Última interacción: ${_computeLastInteraction()}', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13)),
                 ],
               ),
             ),
             const SizedBox(height: 30),
 
-            // HISTORIAL DE PEDIDOS
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Historial Reciente', 
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textNavy)),
+                Text('Historial Reciente', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textNavy)),
                 Icon(Icons.filter_list, color: textNavy, size: 20),
               ],
             ),
             const SizedBox(height: 15),
-            _buildOrderTile('Orden #8812', '24 OCT', ['2 Azules', '1 Celeste'], 'Entregado', Colors.green),
-            _buildOrderTile('Orden #8744', '15 OCT', ['4 Azules'], 'Entregado', Colors.green),
-            _buildOrderTile('Orden #8621', '30 SEP', ['2 Azules', '2 Celestes'], 'Cancelado', Colors.red),
+
+            if (_loading)
+              const Center(child: CircularProgressIndicator())
+            else if (_pedidos.isEmpty)
+              const Text('No hay pedidos registrados para este cliente.', style: TextStyle(color: Colors.grey))
+            else ..._pedidos.map((o) {
+              final rawDate = (o['fecha'] ?? o['fecha_pedido'] ?? o['created_at'] ?? '').toString();
+              final date = _formatDateShort(rawDate);
+              final items = <String>[];
+              final productNames = <String>[];
+              try {
+                if (o['detalles'] is List) {
+                  for (final d in List<Map<String, dynamic>>.from(o['detalles'])) {
+                    final prod = (d['producto'] ?? d['name'] ?? d['producto_nombre'] ?? '').toString();
+                    final qty = (d['cantidad'] ?? d['cant'] ?? d['qty'] ?? '').toString();
+                    if (prod.isNotEmpty) productNames.add(prod);
+                    items.add(qty.isNotEmpty ? '$prod x$qty' : prod);
+                  }
+                } else if (o['items'] is List) {
+                  final rawItems = List.from(o['items']);
+                  for (final it in rawItems) {
+                    final s = it?.toString() ?? '';
+                    if (s.isNotEmpty) productNames.add(s);
+                    items.add(s);
+                  }
+                } else if (o['productos'] != null) {
+                  final prodStr = o['productos'].toString();
+                  productNames.add(prodStr);
+                  items.add(prodStr);
+                }
+              } catch (_) {}
+              final title = productNames.isNotEmpty ? productNames.take(2).join(', ') : 'Pedido';
+              final status = (o['estado'] ?? o['status'] ?? 'PENDIENTE').toString();
+              final statusColor = (status.toUpperCase() == 'CANCELADO') ? Colors.red : Colors.green;
+              return _buildOrderTile(title, date, items, status, statusColor, pedido: o);
+            }).toList(),
           ],
         ),
       ),
@@ -145,36 +236,60 @@ class PerfilClienteInfoScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildOrderTile(String title, String date, List<String> items, String status, Color statusColor) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.grey.shade100),
-      ),
-      child: Row(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(date, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            ],
-          ),
-          const Spacer(),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(status.toUpperCase(), style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10)),
-              const SizedBox(height: 4),
-              Text(items.join(', '), style: const TextStyle(fontSize: 12, color: Colors.black54)),
-            ],
-          ),
-          const SizedBox(width: 10),
-          const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
-        ],
+  Widget _buildOrderTile(String title, String date, List<String> items, String status, Color statusColor, {Map<String, dynamic>? pedido}) {
+    return InkWell(
+      onTap: () async {
+        if (pedido != null) {
+          final result = await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => DetallePedidoScreen(pedido: pedido),
+            ),
+          );
+          if (result == true || result is Map<String, dynamic>) {
+            // if detail screen returned updated data, optionally reload pedidos
+            await _loadPedidos();
+          }
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Colors.grey.shade100),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(date, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Text(title, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                status.toLowerCase(),
+                style: TextStyle(
+                  color: statusColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
+          ],
+        ),
       ),
     );
   }

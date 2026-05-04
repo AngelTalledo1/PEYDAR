@@ -1,230 +1,361 @@
 import 'package:flutter/material.dart';
+import 'package:apppeydar/services/order_service.dart';
+import 'package:apppeydar/ui/confirmacionCliente.dart';
 
-void main() {
-  runApp(const PeydarApp());
-}
+class ResumenPedidoScreen extends StatefulWidget {
+  const ResumenPedidoScreen({
+    super.key,
+    required this.usuarioId,
+    required this.clienteName,
+    required this.direccion,
+    required this.telefono,
+    required this.detalles,
+  });
 
-class PeydarApp extends StatelessWidget {
-  const PeydarApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true, fontFamily: 'sans-serif'),
-      home: const ResumenPedidoScreen(),
-    );
-  }
-}
-
-class ResumenPedidoScreen extends StatelessWidget {
-  const ResumenPedidoScreen({super.key});
-
-  // Colores del ecosistema PEYDAR
-  final Color primaryBlue = const Color(0xFF003DA5);
-  final Color backgroundGrey = const Color(0xFFF8FAFC);
-  final Color textNavy = const Color(0xFF002855);
+  final int usuarioId;
+  final String clienteName;
+  final String direccion;
+  final String telefono;
+  final List<Map<String, dynamic>> detalles;
+  
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: backgroundGrey,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: primaryBlue),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Resumen del Pedido',
-          style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            // Icono Central de Gota
-            Center(
-              child: CircleAvatar(
-                radius: 35,
-                backgroundColor: Colors.cyanAccent.shade100.withOpacity(0.5),
-                child: Icon(Icons.water_drop, color: Colors.cyan.shade700, size: 40),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text('Detalle del Pedido', 
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: textNavy)),
-            const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 40),
-              child: Text(
-                'Revisa los productos seleccionados para tu próxima entrega.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-            ),
-            const SizedBox(height: 30),
+  State<ResumenPedidoScreen> createState() => _ResumenPedidoScreenState();
+}
 
-            // SECCIÓN: RECARGA DE BIDONES
-            _buildSectionContainer(
-              icon: Icons.menu,
-              title: 'Recarga de Bidones',
-              children: [
-                _buildProductTile('Bidón Azul', 'x 2', Colors.blue.shade700),
-                _buildProductTile('Bidón Celeste', 'x 1', Colors.cyan.shade300),
-              ],
-            ),
+class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
+  bool _isSaving = false;
+  String? _errorMessage;
 
-            // SECCIÓN: COMPRA INICIAL
-            _buildSectionContainer(
-              icon: Icons.shopping_basket_outlined,
-              title: 'Compra Inicial',
-              children: [
-                _buildProductTile('Bidón Azul', 'Sin stock pedido', Colors.grey, isOutOfStock: true),
-                _buildProductTile('Bidón Celeste', 'x 1', Colors.cyan.shade300),
-              ],
-            ),
+  Future<void> _confirmarPedido() async {
+    setState(() {
+      _isSaving = true;
+      _errorMessage = null;
+    });
 
-            // SECCIÓN: INFORMACIÓN DE ENTREGA
-            _buildSectionContainer(
-              icon: Icons.local_shipping_outlined,
-              title: 'Información de Entrega',
-              children: [
-                _buildInfoCard(
-                  icon: Icons.location_on_outlined,
-                  label: 'DIRECCIÓN',
-                  content: 'Calle Falsa 123, Depto 4B',
-                  subContent: 'Ciudad Autónoma de Buenos Aires',
-                ),
-                const SizedBox(height: 12),
-                _buildInfoCard(
-                  icon: Icons.phone_outlined,
-                  label: 'TELÉFONO',
-                  content: '+54 9 11 1234-5678',
-                  subContent: 'Habilitado para avisos de llegada',
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 30),
-            
-            // BOTÓN CONFIRMAR
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryBlue,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('Confirmar Pedido', 
-                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
-                      SizedBox(width: 0),
-                      Icon(Icons.arrow_forward, color: Colors.white),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
+    final result = await OrderService.guardarPedido(
+      usuarioId: widget.usuarioId,
+      direccion: widget.direccion,
+      telefono: widget.telefono,
+      detalles: widget.detalles,
     );
-  }
 
-  Widget _buildSectionContainer({required IconData icon, required String title, required List<Widget> children}) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F4F8),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: textNavy, size: 20),
-              const SizedBox(width: 10),
-              Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: textNavy, fontSize: 16)),
-            ],
+    if (!mounted) return;
+
+    if (result.success && result.pedidoId != null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ConfirmacionPedidoScreen(
+            pedidoId: result.pedidoId!,
+            direccion: widget.direccion,
           ),
-          const SizedBox(height: 15),
-          ...children,
-        ],
-      ),
-    );
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSaving = false;
+      _errorMessage = result.message;
+    });
   }
 
-  Widget _buildProductTile(String name, String quantity, Color color, {bool isOutOfStock = false}) {
+  Widget _buildDetailRow(Map<String, dynamic> detalle) {
+    final String tipo = detalle['tipo']?.toString() ?? 'Producto';
+    final String color = detalle['color']?.toString() ?? '';
+    final String cantidad = detalle['cantidad']?.toString() ?? '0';
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(15),
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: isOutOfStock ? Border.all(color: Colors.grey.shade200, style: BorderStyle.solid) : null,
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.local_drink, color: color),
-          const SizedBox(width: 15),
-          Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w600))),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: isOutOfStock ? Colors.transparent : textNavy,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              quantity,
-              style: TextStyle(
-                color: isOutOfStock ? Colors.grey : Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildInfoCard({required IconData icon, required String label, required String content, required String subContent}) {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: textNavy, size: 22),
-          const SizedBox(width: 15),
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: const Color(0xFFE8F3FF),
+            child: const Icon(Icons.local_drink, color: Color(0xFF003DA5)),
+          ),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                Text(
+                  '$tipo $color',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Cantidad: $cantidad',
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            'x$cantidad',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoTile(IconData icon, String title, String value) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF003DA5)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(content, style: TextStyle(fontWeight: FontWeight.bold, color: textNavy, fontSize: 14)),
-                Text(subContent, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF003DA5)),
+          onPressed: _isSaving ? null : () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Resumen del pedido',
+          style: TextStyle(
+            color: Color(0xFF003DA5),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            Text(
+              'Hola, ${widget.clienteName}',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF002855),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Revisa tu pedido antes de confirmarlo.',
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 24),
+            _buildInfoTile(
+              Icons.location_on_outlined,
+              'Dirección de entrega',
+              widget.direccion,
+            ),
+            _buildInfoTile(
+              Icons.phone_outlined,
+              'Teléfono de contacto',
+              widget.telefono,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Productos',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  ...widget.detalles.map(_buildDetailRow).toList(),
+                ],
+              ),
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.red.shade200, width: 2),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.red.shade700,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Error al guardar el pedido',
+                            style: TextStyle(
+                              color: Colors.red.shade700,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _errorMessage!,
+                      style: TextStyle(
+                        color: Colors.red.shade600,
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _confirmarPedido,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade700,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Reintentar',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonal(
+                    onPressed: _isSaving ? null : () => Navigator.pop(context),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                    child: const Text('Volver y editar'),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _isSaving ? null : _confirmarPedido,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF003DA5),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Confirmar pedido',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }

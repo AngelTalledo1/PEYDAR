@@ -1,37 +1,98 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:apppeydar/services/order_service.dart';
+import 'package:apppeydar/ui/detalle_pedido.dart';
+import 'package:apppeydar/ui/resumenPedido.dart';
 
-void main() {
-  runApp(const PeydarApp());
-}
-
-class PeydarApp extends StatelessWidget {
-  const PeydarApp({super.key});
+class MisPedidosPage extends StatefulWidget {
+  const MisPedidosPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'PEYDAR',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'sans-serif', // Recomiendo usar 'Inter' o 'Poppins' en pubspec.yaml
-        useMaterial3: true,
-      ),
-      home: const MisPedidosScreen(),
-    );
-  }
+  State<MisPedidosPage> createState() => _MisPedidosPageState();
 }
 
-class MisPedidosScreen extends StatelessWidget {
-  const MisPedidosScreen({super.key});
+class _MisPedidosPageState extends State<MisPedidosPage> {
+  late String clienteName;
+  int? usuarioId;
+  Map<String, dynamic>? _activeOrder;
+  String _selectedFilter = 'TODOS';
 
-  // Paleta de colores exacta de la imagen
   static const Color primaryBlue = Color(0xFF005BCB);
   static const Color backgroundGrey = Color(0xFFF8FAFC);
   static const Color textDark = Color(0xFF1A1A1A);
   static const Color textLight = Color(0xFF64748B);
 
   @override
+  void initState() {
+    super.initState();
+    clienteName = 'Cliente'; // Initialize with default value
+  }
+
+  Future<void> _loadActiveOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final s = prefs.getString('active_order');
+    if (s != null) {
+      try {
+        final m = jsonDecode(s) as Map<String, dynamic>;
+        // Sólo consideramos como activo si el estado es EN_CURSO (admin debe marcarlo)
+        if ((m['status'] ?? '').toString().toUpperCase() == 'EN_CURSO') {
+          setState(() {
+            _activeOrder = m;
+          });
+        }
+      } catch (_) {}
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    clienteName = args?['nombre'] ?? 'Cliente';
+    usuarioId = args?['id'] ?? args?['usuario_id'];
+    if (usuarioId != null) _fetchPedidos();
+    _loadActiveOrder();
+  }
+
+  List<Map<String, dynamic>> _pedidos = [];
+
+  Future<void> _fetchPedidos() async {
+    if (usuarioId == null) return;
+    try {
+      final list = await OrderService.obtenerPedidos(usuarioId!);
+      setState(() {
+        _pedidos = list;
+        // if backend provides an active order (estado EN_CURSO), prefer it
+        final active = _pedidos.firstWhere((p) => (p['estado'] ?? '').toString().toUpperCase() == 'EN_CURSO', orElse: () => {});
+        if (active.isNotEmpty) {
+          _activeOrder = {
+            'pedido_id': active['id'],
+            'status': active['estado'],
+            'direccion': active['direccion_entrega'] ?? active['direccion'] ?? '',
+            'date': active['fecha_pedido'],
+            'title': 'Pedido #${active['id'] ?? ''}'
+          };
+        } else {
+          // if no active, clear local active
+          _activeOrder = null;
+        }
+      });
+    } catch (e) {
+      // ignore fetch errors for now
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final filteredPedidos = (_selectedFilter == 'TODOS')
+        ? _pedidos
+        : _pedidos.where((p) {
+            final s = (p['estado'] ?? '').toString().toUpperCase();
+            if (_selectedFilter == 'EN_CAMINO') return s == 'EN_CAMINO' || s == 'EN_CURSO';
+            return s == _selectedFilter;
+          }).toList();
+
     return Scaffold(
       backgroundColor: backgroundGrey,
       appBar: _buildAppBar(),
@@ -43,55 +104,107 @@ class MisPedidosScreen extends StatelessWidget {
             const SizedBox(height: 20),
             _buildHeader(),
             const SizedBox(height: 32),
-            _buildSectionLabel('PEDIDO EN CURSO'),
-            const SizedBox(height: 16),
-            _buildActiveOrderCard(),
-            const SizedBox(height: 40),
+            _activeOrder != null
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSectionLabel('PEDIDO EN CURSO'),
+                      const SizedBox(height: 16),
+                      _buildActiveOrderCard(),
+                      const SizedBox(height: 40),
+                    ],
+                  )
+                : const SizedBox.shrink(),
             _buildHistoryHeader(),
             const SizedBox(height: 16),
-            _buildHistoryItem(
-              title: '5 Recargas ',
-              id: 'AF-88219',
-              date: '12 Oct, 2023',
-              price: '\$42.50',
-              status: 'ENTREGADO',
-              statusColor: const Color(0xFF22C55E),
-              statusBg: const Color(0xFFF0FDF4),
-              icon: Icons.water_drop,
-              iconColor: const Color(0xFF0891B2),
-              iconBg: const Color(0xFFECFEFF),
-            ),
-            _buildHistoryItem(
-              title: '2 Recargas de 20L',
-              id: 'AF-87902',
-              date: '05 Oct, 2023',
-              price: '\$18.00',
-              status: 'ENTREGADO',
-              statusColor: const Color(0xFF22C55E),
-              statusBg: const Color(0xFFF0FDF4),
-              icon: Icons.water_drop,
-              iconColor: const Color(0xFF0891B2),
-              iconBg: const Color(0xFFECFEFF),
-            ),
-            _buildHistoryItem(
-              title: '1 Botellón Extra',
-              id: 'AF-87110',
-              date: '28 Sep, 2023',
-              price: '\$9.00',
-              status: 'CANCELADO',
-              statusColor: const Color(0xFFEF4444),
-              statusBg: const Color(0xFFFEF2F2),
-              icon: Icons.block,
-              iconColor: const Color(0xFFB91C1C),
-              iconBg: const Color(0xFFFEF2F2),
-            ),
+            _buildStatusFilters(),
+            // Mostrar historial real desde backend
+            ...filteredPedidos.map((p) {
+              final detalles = (p['detalles'] as List? ) ?? [];
+              // Preferir título provisto por backend (Pedido 1, Pedido 2, ...)
+              final title = (p['title'] as String?) ?? (detalles.isNotEmpty ? '${detalles.length} items' : 'Pedido #${p['id'] ?? ''}');
+              final id = (p['id'] ?? '').toString();
+              final dateRaw = (p['fecha_pedido'] ?? '').toString();
+              final date = dateRaw.isNotEmpty ? dateRaw.split('T').first : '';
+              final status = (p['estado'] ?? 'PENDIENTE').toString();
+              final statusUpper = status.toUpperCase();
+
+              Color statusColor;
+              Color statusBg;
+              IconData icon;
+              Color iconColor;
+              Color iconBg;
+
+              if (statusUpper == 'PENDIENTE') {
+                statusColor = Colors.grey.shade700;
+                statusBg = Colors.grey.shade100;
+                icon = Icons.hourglass_empty;
+                iconColor = Colors.grey;
+                iconBg = Colors.grey.shade50;
+              } else if (statusUpper == 'EN_CAMINO' || statusUpper == 'EN_CURSO') {
+                statusColor = const Color(0xFF0369A1);
+                statusBg = Colors.lightBlue.shade50;
+                icon = Icons.local_shipping;
+                iconColor = const Color(0xFF0369A1);
+                iconBg = Colors.lightBlue.shade50;
+              } else if (statusUpper == 'FINALIZADO') {
+                statusColor = const Color(0xFF16A34A);
+                statusBg = Colors.green.shade50;
+                icon = Icons.check_circle;
+                iconColor = const Color(0xFF16A34A);
+                iconBg = Colors.green.shade50;
+              } else if (statusUpper == 'CANCELADO') {
+                statusColor = const Color(0xFFEF4444);
+                statusBg = const Color(0xFFFEF2F2);
+                icon = Icons.block;
+                iconColor = const Color(0xFFB91C1C);
+                iconBg = const Color(0xFFFEF2F2);
+              } else {
+                statusColor = Colors.grey.shade700;
+                statusBg = Colors.grey.shade100;
+                icon = Icons.local_shipping;
+                iconColor = const Color(0xFF0891B2);
+                iconBg = const Color(0xFFECFEFF);
+              }
+
+              final widgetItem = _buildHistoryItem(
+                title: title,
+                id: id,
+                date: date,
+                price: '',
+                status: status,
+                statusColor: statusColor,
+                statusBg: statusBg,
+                icon: icon,
+                iconColor: iconColor,
+                iconBg: iconBg,
+              );
+              // Navegación según estado: PENDIENTE -> Detalle (solo lectura), FINALIZADO -> Detalle (solo lectura), otros -> Detalle (solo lectura)
+              return GestureDetector(
+                onTap: () {
+                  if (statusUpper == 'PENDIENTE') {
+                    // Mostrar detalle de pedido en modo solo lectura (pendiente: sin monto final)
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => DetallePedidoScreen(pedido: p, readOnly: true),
+                    ));
+                    return;
+                  }
+
+                  // Para finalizado y otros estados mostramos detalle en modo solo lectura
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => DetallePedidoScreen(pedido: p, readOnly: true),
+                  ));
+                },
+                child: widgetItem,
+              );
+            }).toList(),
             const SizedBox(height: 24),
             _buildLoadMoreButton(),
-            const SizedBox(height: 100), // Espacio para la barra inferior
+            const SizedBox(height: 100),
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: _buildBottomNav(context),
     );
   }
 
@@ -122,12 +235,12 @@ class MisPedidosScreen extends StatelessWidget {
   }
 
   Widget _buildHeader() {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Mis Pedidos', style: TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: textDark)),
-        SizedBox(height: 8),
-        Text('Gestiona tus entregas de agua y recargas activas.', style: TextStyle(fontSize: 16, color: textLight)),
+        const Text('Mis Pedidos', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: textDark)),
+        const SizedBox(height: 8),
+        Text('Cliente: $clienteName', style: const TextStyle(fontSize: 16, color: textLight)),
       ],
     );
   }
@@ -137,6 +250,12 @@ class MisPedidosScreen extends StatelessWidget {
   }
 
   Widget _buildActiveOrderCard() {
+    if (_activeOrder == null) return const SizedBox.shrink();
+
+    final title = _activeOrder?['title'] ?? 'Pedido en curso';
+    final direccion = _activeOrder?['direccion'] ?? '';
+    final date = _activeOrder?['date'] ?? '';
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -160,8 +279,10 @@ class MisPedidosScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          const Text('3 Recargas de 20L', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-          const Text('Llega hoy, aprox. 14:30 - 15:00', style: TextStyle(color: Colors.white70, fontSize: 16)),
+          Text(title, style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+          Text('Dirección: $direccion', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+          const SizedBox(height: 6),
+          Text('Fecha: $date', style: const TextStyle(color: Colors.white70, fontSize: 13)),
           const SizedBox(height: 24),
           ElevatedButton(
             onPressed: () {},
@@ -198,10 +319,49 @@ class MisPedidosScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildStatusFilters() {
+    final options = ['TODOS', 'PENDIENTE', 'EN_CAMINO', 'FINALIZADO'];
+    String label(String v) {
+      if (v == 'TODOS') return 'Todos';
+      if (v == 'EN_CAMINO') return 'En camino';
+      if (v == 'PENDIENTE') return 'Pendiente';
+      return 'Finalizado';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Wrap(
+        spacing: 8,
+        children: options.map((opt) {
+          final selected = _selectedFilter == opt;
+          return ChoiceChip(
+            label: Text(label(opt)),
+            selected: selected,
+            onSelected: (s) => setState(() {
+              _selectedFilter = opt;
+            }),
+            selectedColor: primaryBlue,
+            backgroundColor: Colors.white,
+            labelStyle: TextStyle(color: selected ? Colors.white : primaryBlue, fontWeight: FontWeight.bold),
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildHistoryItem({
-    required String title, required String id, required String date,
-    required String price, required String status, required Color statusColor,
-    required Color statusBg, required IconData icon, required Color iconColor, required Color iconBg,
+    required String title,
+    required String id,
+    required String date,
+    required String price,
+    required String status,
+    required Color statusColor,
+    required Color statusBg,
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBg,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -226,8 +386,7 @@ class MisPedidosScreen extends StatelessWidget {
                     Text(price, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text('ID: #$id  •  $date', style: const TextStyle(color: textLight, fontSize: 13)),
+                Text(date, style: TextStyle(color: textLight, fontSize: 13)),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -264,7 +423,7 @@ class MisPedidosScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNav() {
+  Widget _buildBottomNav(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
       decoration: const BoxDecoration(
@@ -275,13 +434,22 @@ class MisPedidosScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.shopping_basket_outlined, color: textLight),
-              SizedBox(height: 4),
-              Text('Realizar pedido', style: TextStyle(color: textLight, fontSize: 12)),
-            ],
+          GestureDetector(
+            onTap: () {
+              Navigator.pushNamed(
+                context,
+                '/cliente/pedido',
+                arguments: {'nombre': clienteName, 'id': usuarioId},
+              );
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.shopping_basket_outlined, color: textLight),
+                SizedBox(height: 4),
+                Text('Realizar pedido', style: TextStyle(color: textLight, fontSize: 14)),
+              ],
+            ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),

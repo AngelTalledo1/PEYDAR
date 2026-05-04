@@ -13,7 +13,18 @@ class MenuAdm extends StatelessWidget {
   Widget build(BuildContext context) {
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    final String nombre = args?['nombre'] ?? 'Admin';
+    final String nombreRaw = args?['nombre'] ?? 'Admin';
+    String nombre = nombreRaw;
+    try {
+      final parts = nombreRaw.split(' ').where((s) => s.isNotEmpty).toList();
+      if (parts.isNotEmpty) {
+        final first = parts[0];
+        final second = parts.length > 1 ? parts[1] : '';
+        nombre = [first, second].where((s) => s.isNotEmpty).join(' ');
+      }
+    } catch (_) {
+      nombre = nombreRaw;
+    }
 
     return Scaffold(
       backgroundColor: backgroundGrey,
@@ -44,6 +55,7 @@ class MenuAdm extends StatelessWidget {
                   'Visualiza tu base de usuarios, preferencias de suscripción y perfiles de contacto.',
               actionText: 'Explorar lista',
               route: '/admin/clientes',
+              routeArgs: {'nombre': nombre},
             ),
             _buildActionCard(
               context: context,
@@ -74,12 +86,32 @@ class MenuAdm extends StatelessWidget {
             color: textDark, fontWeight: FontWeight.bold, fontSize: 18),
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.logout, color: primaryBlue),
-          tooltip: 'Cerrar sesión',
-          onPressed: () =>
-              Navigator.pushReplacementNamed(context, '/login'),
-        ),
+       IconButton(
+            icon: const Icon(Icons.logout, color: Colors.redAccent),
+            tooltip: 'Cerrar sesión',
+            onPressed: () async {
+              final ok = await showDialog<bool?>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Cerrar sesión'),
+                  content: const Text('¿Estás seguro que deseas cerrar sesión?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text('No'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: const Text('Sí'),
+                    ),
+                  ],
+                ),
+              );
+              if (ok == true) {
+                Navigator.pushReplacementNamed(context, '/login');
+              }
+            },
+          ),
       ],
     );
   }
@@ -128,9 +160,10 @@ class MenuAdm extends StatelessWidget {
     required String description,
     required String actionText,
     required String route,
+    Map<String, dynamic>? routeArgs,
   }) {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, route),
+      onTap: () => Navigator.pushNamed(context, route, arguments: routeArgs),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(20),

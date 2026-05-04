@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:apppeydar/services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
@@ -39,12 +40,11 @@ class _LoginPageState extends State<LoginPage> {
 
     if (!mounted) return;
 
-    if (result['success'] == true) {
-      final String rol = result['rol'];
-      final String nombre = result['nombre'];
-      final int id = result['id'];
+    if (result.success) {
+      final String rol = result.role ?? 'cliente';
+      final String nombre = result.nombre ?? username;
+      final int id = result.id ?? 0;
 
-      // Navegación automática según el rol de la base de datos
       if (rol == 'administrador') {
         Navigator.pushReplacementNamed(
           context,
@@ -59,7 +59,9 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
     } else {
-      _showError(result['message'] ?? 'Usuario o contraseña incorrectos');
+      _showError(result.message.isNotEmpty
+          ? result.message
+          : 'Usuario o contraseña incorrectos');
     }
   }
 
@@ -188,6 +190,8 @@ class _LoginPageState extends State<LoginPage> {
                 Expanded(
                   child: TextField(
                     controller: _usernameController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
                     decoration: const InputDecoration(
                       hintText: 'Ingrese su usuario',
                       border: InputBorder.none,
