@@ -21,6 +21,7 @@ class _InicioClienteState extends State<InicioCliente> {
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final String nombre = args?['nombre'] ?? 'Cliente';
+    final int? usuarioId = args?['id'] ?? args?['usuario_id'];
 
     // Genera iniciales para el avatar (ej: "Juan Pérez" → "JP")
     final String iniciales = nombre
@@ -57,7 +58,11 @@ class _InicioClienteState extends State<InicioCliente> {
                       hasGradient: true,
                       onTap: () {
                         setState(() => _selectedNavIndex = 0);
-                        Navigator.pushNamed(context, '/cliente/pedido');
+                        Navigator.pushNamed(
+                          context,
+                          '/cliente/pedido',
+                          arguments: {'nombre': nombre, 'id': usuarioId},
+                        );
                       },
                     ),
                     const SizedBox(height: 16),
@@ -71,7 +76,11 @@ class _InicioClienteState extends State<InicioCliente> {
                       hasGradient: false,
                       onTap: () {
                         setState(() => _selectedNavIndex = 1);
-                        Navigator.pushNamed(context, '/cliente/mis-pedidos');
+                        Navigator.pushNamed(
+                          context,
+                          '/cliente/mis-pedidos',
+                          arguments: {'nombre': nombre, 'id': usuarioId},
+                        );
                       },
                     ),
                     const SizedBox(height: 20),
@@ -262,6 +271,11 @@ class _InicioClienteState extends State<InicioCliente> {
   }
 
   Widget _buildBottomNavBar(BuildContext context) {
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final String nombre = args?['nombre'] ?? 'Cliente';
+    final int? usuarioId = args?['id'] ?? args?['usuario_id'];
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -283,6 +297,8 @@ class _InicioClienteState extends State<InicioCliente> {
             label: 'Realizar pedido',
             index: 0,
             route: '/cliente/pedido',
+            nombre: nombre,
+            usuarioId: usuarioId,
           ),
           _buildNavItem(
             context: context,
@@ -290,6 +306,8 @@ class _InicioClienteState extends State<InicioCliente> {
             label: 'Ver mis pedidos',
             index: 1,
             route: '/cliente/mis-pedidos',
+            nombre: nombre,
+            usuarioId: usuarioId,
           ),
         ],
       ),
@@ -302,12 +320,18 @@ class _InicioClienteState extends State<InicioCliente> {
     required String label,
     required int index,
     required String route,
+    required String nombre,
+    required int? usuarioId,
   }) {
     final bool isActive = _selectedNavIndex == index;
     return GestureDetector(
       onTap: () {
         setState(() => _selectedNavIndex = index);
-        Navigator.pushNamed(context, route);
+        Navigator.pushNamed(
+          context,
+          route,
+          arguments: {'nombre': nombre, 'id': usuarioId},
+        );
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
