@@ -1,36 +1,19 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'api_config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthResult {
   final bool success;
   final String message;
-  final String? role;
   final String? nombre;
+  final String? role;
   final int? id;
-  final String? token;
 
-  const AuthResult({
+  AuthResult({
     required this.success,
     required this.message,
-    this.role,
     this.nombre,
+    this.role,
     this.id,
-    this.token,
   });
-
-  factory AuthResult.fromJson(Map<String, dynamic> json) {
-    return AuthResult(
-      success: json['success'] == true,
-      message: json['message']?.toString() ?? '',
-      role: json['role']?.toString(),
-      nombre: json['name']?.toString(),
-      id: json['user'] != null
-          ? int.tryParse(json['user']['id']?.toString() ?? '')
-          : null,
-      token: json['token']?.toString(),
-    );
-  }
 
   factory AuthResult.failure(String message) {
     return AuthResult(success: false, message: message);
@@ -38,29 +21,58 @@ class AuthResult {
 }
 
 class AuthService {
-  static String get baseUrl => ApiConfig.baseUrl;
+  static final supabase = Supabase.instance.client;
 
-  static Future<AuthResult> login(String username, String password) async {
+  static Future<AuthResult> login(String dni, String password) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': username,
-          'password': password,
-        }),
+      final emailFake = "$dni@peydar.com";
+
+      // 1. Intentar autenticación (flujo original)
+      final res = await supabase.auth.signInWithPassword(
+        email: emailFake,
+        password: password,
       );
 
-      if (response.statusCode == 200) {
-        return AuthResult.fromJson(jsonDecode(response.body));
+      final user = res.user;
+
+      if (user == null) {
+        return AuthResult.failure('Contraseña incorrecta');
       }
 
-      final errorJson = jsonDecode(response.body);
-      return AuthResult.failure(
-        errorJson['message']?.toString() ?? 'Error del servidor',
+      // 2. Buscar datos del usuario en la tabla
+      final data = await supabase
+          .from('usuario')
+          .select()
+          .eq('auth_id', user.id)
+          .maybeSingle();
+
+      if (data == null) {
+        return AuthResult.failure(
+          'Usuario existe en Auth pero no en tabla usuario',
+        );
+      }
+
+      return AuthResult(
+        success: true,
+        message: 'Login correcto',
+        nombre: data['nombre'],
+        role: data['tipo_usuario'],
+        id: data['id'],
       );
+    } on AuthException catch (e) {
+      // 3. Auth falló — distinguir entre usuario y contraseña
+      final usuarioExiste = await supabase
+          .from('usuario')
+          .select()
+          .eq('dni', dni)
+          .maybeSingle();
+
+      if (usuarioExiste == null) {
+        return AuthResult.failure('Usuario incorrecto');
+      }
+      return AuthResult.failure('Contraseña incorrecta');
     } catch (e) {
-      return AuthResult.failure('Error de conexión: ${e.toString()}');
+      return AuthResult.failure(e.toString());
     }
   }
 }

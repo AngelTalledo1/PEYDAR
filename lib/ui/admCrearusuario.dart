@@ -6,7 +6,10 @@ class RegistrarUsuarioScreen extends StatefulWidget {
   /// Si se pasa [clienteEditar], la pantalla entra en modo edición con los campos prellenados.
   /// Si es null, la pantalla entra en modo creación con campos vacíos.
   final Map<String, dynamic>? clienteEditar;
-  const RegistrarUsuarioScreen({super.key, this.clienteEditar});
+
+  /// true → crea admin, false → crea cliente (default)
+  final bool modoAdmin;
+  const RegistrarUsuarioScreen({super.key, this.clienteEditar, this.modoAdmin = false});
 
   @override
   State<RegistrarUsuarioScreen> createState() => _RegistrarUsuarioScreenState();
@@ -72,7 +75,11 @@ class _RegistrarUsuarioScreenState extends State<RegistrarUsuarioScreen> {
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         title: Text(
-          _isEditing ? 'Editar Cliente' : 'Nuevo Cliente',
+          _isEditing
+              ? 'Editar Cliente'
+              : widget.modoAdmin
+                  ? 'Nuevo Administrador'
+                  : 'Nuevo Cliente',
           style: TextStyle(
               color: primaryBlue, fontWeight: FontWeight.bold, fontSize: 18),
         ),
@@ -98,7 +105,11 @@ class _RegistrarUsuarioScreenState extends State<RegistrarUsuarioScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _isEditing ? 'Editar Usuario' : 'Registrar Usuario',
+                        _isEditing
+                            ? 'Editar Usuario'
+                            : widget.modoAdmin
+                                ? 'Registrar Administrador'
+                                : 'Registrar Usuario',
                         style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -108,7 +119,9 @@ class _RegistrarUsuarioScreenState extends State<RegistrarUsuarioScreen> {
                       Text(
                         _isEditing
                             ? 'Modifique los datos del cliente y guarde los cambios.'
-                            : 'Ingrese los datos para habilitar el acceso al nuevo cliente.',
+                            : widget.modoAdmin
+                                ? 'Cree un nuevo administrador con acceso al panel de control.'
+                                : 'Ingrese los datos para habilitar el acceso al nuevo cliente.',
                         style:
                             const TextStyle(color: Colors.grey, fontSize: 14),
                       ),
@@ -175,10 +188,12 @@ class _RegistrarUsuarioScreenState extends State<RegistrarUsuarioScreen> {
                           child: _isSaving
                               ? const CircularProgressIndicator(
                                   color: Colors.white)
-                              : Text(
+                                  : Text(
                                   _isEditing
                                       ? 'Guardar Cambios'
-                                      : 'Crear Cuenta de Cliente',
+                                      : widget.modoAdmin
+                                          ? 'Crear Administrador'
+                                          : 'Crear Cuenta de Cliente',
                                   style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
@@ -362,8 +377,28 @@ class _RegistrarUsuarioScreenState extends State<RegistrarUsuarioScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(res['message']?.toString() ?? 'No se pudo actualizar')));
         }
+      } else if (widget.modoAdmin) {
+        // ── MODO CREACIÓN ADMIN ──
+        final res = await UserService.crearAdmin(
+          usuario: usuario,
+          nombre: nombre,
+          apellido: apellido,
+          telefono: telefono,
+          password: password,
+          gmail: gmail,
+          direccion: direccion,
+        );
+        final success = res['status'] == 'success' || res['success'] == true;
+        if (success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Administrador creado con éxito')));
+          Navigator.of(context).pop(true);
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(res['message']?.toString() ?? 'No se pudo crear el administrador')));
+        }
       } else {
-        // ── MODO CREACIÓN ──
+        // ── MODO CREACIÓN CLIENTE ──
         final res = await UserService.crearCliente(
           usuario: usuario,
           nombre: nombre,

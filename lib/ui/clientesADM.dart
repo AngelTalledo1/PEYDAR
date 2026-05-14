@@ -180,6 +180,10 @@ class _DirectorioClientesScreenState
                   style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 20),
 
+              // ── Stats arriba (lo primero que se ve) ─────────────────────────
+              _buildStatsRow(),
+              const SizedBox(height: 20),
+
               // ── Botón NUEVO CLIENTE ──────────────────────────────────────
               SizedBox(
                 width: double.infinity,
@@ -243,15 +247,6 @@ class _DirectorioClientesScreenState
 
               // ── Lista ────────────────────────────────────────────────────
               _buildCustomerList(),
-              const SizedBox(height: 25),
-
-              // ── Métrica ──────────────────────────────────────────────────
-              _buildStatCard(
-                title: 'TOTAL CLIENTES',
-                value: _visibleCount().toString(),
-                subtitle: '+0% este mes',
-                color: primaryBlue,
-              ),
             ],
           ),
         ),
@@ -513,47 +508,90 @@ class _DirectorioClientesScreenState
     );
   }
 
-  Widget _buildStatCard({
-    required String title,
-    required String value,
-    required String subtitle,
-    required Color color,
-  }) {
+  int _totalActivos() =>
+      _clientes.where((c) => (c['estado'] ?? 'ACTIVO').toString().toUpperCase() == 'ACTIVO').length;
+  int _totalInactivos() =>
+      _clientes.where((c) => (c['estado'] ?? 'ACTIVO').toString().toUpperCase() != 'ACTIVO').length;
+
+  Widget _buildStatsRow() {
+    final activos = _totalActivos();
+    final inactivos = _totalInactivos();
+    final total = _clientes.length;
+
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(25),
-      decoration:
-          BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1)),
-          const SizedBox(height: 5),
-          Text(value,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20)),
-            child: Text(subtitle,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500)),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
+      child: Row(
+        children: [
+          _statTile(
+            label: 'Activos',
+            value: activos.toString(),
+            color: const Color(0xFF2E7D32),
+            icon: Icons.person_outline,
+          ),
+          _statDivider(),
+          _statTile(
+            label: 'Inactivos',
+            value: inactivos.toString(),
+            color: const Color(0xFFC62828),
+            icon: Icons.person_off_outlined,
+          ),
+          _statDivider(),
+          _statTile(
+            label: 'Total',
+            value: total.toString(),
+            color: primaryBlue,
+            icon: Icons.people_outline,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statTile({
+    required String label,
+    required String value,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, color: color.withOpacity(0.6), size: 22),
+          const SizedBox(height: 6),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                  height: 1)),
+          const SizedBox(height: 4),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5)),
+        ],
+      ),
+    );
+  }
+
+  Widget _statDivider() {
+    return Container(
+      width: 1,
+      height: 50,
+      color: Colors.grey.shade200,
     );
   }
 
@@ -562,6 +600,16 @@ class _DirectorioClientesScreenState
       currentIndex: 1,
       selectedItemColor: primaryBlue,
       unselectedItemColor: Colors.grey,
+      onTap: (index) {
+        switch (index) {
+          case 0:
+            Navigator.pushReplacementNamed(context, '/admin/pedidos');
+            break;
+          case 2:
+            Navigator.pushReplacementNamed(context, '/admin/reportes');
+            break;
+        }
+      },
       items: const [
         BottomNavigationBarItem(
             icon: Icon(Icons.local_shipping), label: 'PEDIDOS'),

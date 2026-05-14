@@ -10,6 +10,8 @@ class ResumenPedidoScreen extends StatefulWidget {
     required this.direccion,
     required this.telefono,
     required this.detalles,
+    this.latitud,
+    this.longitud,
   });
 
   final int usuarioId;
@@ -17,7 +19,8 @@ class ResumenPedidoScreen extends StatefulWidget {
   final String direccion;
   final String telefono;
   final List<Map<String, dynamic>> detalles;
-  
+  final double? latitud;
+  final double? longitud;
 
   @override
   State<ResumenPedidoScreen> createState() => _ResumenPedidoScreenState();
@@ -38,6 +41,8 @@ class _ResumenPedidoScreenState extends State<ResumenPedidoScreen> {
       direccion: widget.direccion,
       telefono: widget.telefono,
       detalles: widget.detalles,
+      latitud: widget.latitud,
+      longitud: widget.longitud,
     );
 
     if (!mounted) return;

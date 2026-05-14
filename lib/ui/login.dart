@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:apppeydar/services/auth_service.dart';
+import 'package:apppeydar/services/fcm_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -44,6 +45,14 @@ class _LoginPageState extends State<LoginPage> {
       final String rol = result.role ?? 'cliente';
       final String nombre = result.nombre ?? username;
       final int id = result.id ?? 0;
+
+      // Registrar FCM token si es admin (para recibir notis de pedidos)
+      if (rol == 'administrador') {
+        final token = await FcmService.requestPermission();
+        if (token != null) {
+          await FcmService.guardarToken(usuarioId: id, token: token);
+        }
+      }
 
       if (rol == 'administrador') {
         Navigator.pushReplacementNamed(

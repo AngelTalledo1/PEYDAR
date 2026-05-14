@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:apppeydar/services/order_service.dart';
+import 'package:apppeydar/services/boleta_service.dart';
 import 'package:apppeydar/ui/detalle_pedido.dart';
 import 'package:apppeydar/ui/resumenPedido.dart';
 
@@ -17,6 +19,7 @@ class _MisPedidosPageState extends State<MisPedidosPage> {
   int? usuarioId;
   Map<String, dynamic>? _activeOrder;
   String _selectedFilter = 'TODOS';
+  late final RealtimeChannel _realtimeChannel;
 
   static const Color primaryBlue = Color(0xFF005BCB);
   static const Color backgroundGrey = Color(0xFFF8FAFC);
@@ -27,6 +30,19 @@ class _MisPedidosPageState extends State<MisPedidosPage> {
   void initState() {
     super.initState();
     clienteName = 'Cliente'; // Initialize with default value
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    _realtimeChannel = Supabase.instance.client.channel('pedidos-cliente');
+    _realtimeChannel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'pedidos',
+      callback: (_) {
+        if (mounted) _fetchPedidos();
+      },
+    ).subscribe();
   }
 
   Future<void> _loadActiveOrder() async {
@@ -120,7 +136,7 @@ class _MisPedidosPageState extends State<MisPedidosPage> {
             _buildStatusFilters(),
             // Mostrar historial real desde backend
             ...filteredPedidos.map((p) {
-              final detalles = (p['detalles'] as List? ) ?? [];
+              final detalles = (p['detalles_pedido'] as List? ) ?? [];
               // Preferir título provisto por backend (Pedido 1, Pedido 2, ...)
               final title = (p['title'] as String?) ?? (detalles.isNotEmpty ? '${detalles.length} items' : 'Pedido #${p['id'] ?? ''}');
               final id = (p['id'] ?? '').toString();
@@ -180,22 +196,35 @@ class _MisPedidosPageState extends State<MisPedidosPage> {
                 iconBg: iconBg,
               );
               // Navegación según estado: PENDIENTE -> Detalle (solo lectura), FINALIZADO -> Detalle (solo lectura), otros -> Detalle (solo lectura)
-              return GestureDetector(
-                onTap: () {
-                  if (statusUpper == 'PENDIENTE') {
-                    // Mostrar detalle de pedido en modo solo lectura (pendiente: sin monto final)
-                    Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => DetallePedidoScreen(pedido: p, readOnly: true),
-                    ));
-                    return;
-                  }
-
-                  // Para finalizado y otros estados mostramos detalle en modo solo lectura
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => DetallePedidoScreen(pedido: p, readOnly: true),
-                  ));
-                },
-                child: widgetItem,
+              return Column(
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => DetallePedidoScreen(pedido: p, readOnly: true),
+                      ));
+                    },
+                    child: widgetItem,
+                  ),
+                  if (statusUpper == 'FINALIZADO')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _verBoletaCliente(p),
+                          icon: const Icon(Icons.receipt_long, size: 16),
+                          label: const Text('Ver Boleta', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF003DA5),
+                            side: const BorderSide(color: Color(0xFF003DA5)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               );
             }).toList(),
             const SizedBox(height: 24),
@@ -423,9 +452,43 @@ class _MisPedidosPageState extends State<MisPedidosPage> {
     );
   }
 
+  Future<void> _verBoletaCliente(Map<String, dynamic> p) async {
+    final nombre = (p['usuario']?['nombre'] ?? clienteName).toString();
+    final apellido = (p['usuario']?['apellido'] ?? '').toString();
+    final clienteNombre = [nombre, apellido].where((s) => s.isNotEmpty).join(' ');
+    final direccion = (p['direccion_entrega'] ?? '').toString();
+    final telefono = (p['telefono_contacto'] ?? '').toString();
+    final pedidoId = p['id'] is int ? p['id'] as int : int.tryParse(p['id']?.toString() ?? '0') ?? 0;
+    
+    // Get monto from whatever field it might be in
+    double montoFinal = 0;
+    final rawMonto = p['monto_final'] ?? p['monto'] ?? p['total'];
+    if (rawMonto != null) {
+      montoFinal = rawMonto is double ? rawMonto : double.tryParse(rawMonto.toString()) ?? 0;
+    }
+    
+    final List<Map<String, dynamic>> detalles = ((p['detalles_pedido'] as List?) ?? []).cast<Map<String, dynamic>>();
+    
+    final rawFecha = (p['fecha_pedido'] ?? '').toString();
+    String fecha = rawFecha;
+    try {
+      final dt = DateTime.parse(rawFecha).toLocal();
+      fecha = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+    } catch (_) {}
+    
+    await BoletaService.verBoleta(
+      pedidoId: pedidoId,
+      clienteNombre: clienteNombre.isNotEmpty ? clienteNombre : 'Cliente',
+      direccion: direccion,
+      telefono: telefono,
+      detalles: detalles,
+      montoFinal: montoFinal,
+      fecha: fecha,
+    );
+  }
+
   Widget _buildBottomNav(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+    return Container(      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
@@ -465,5 +528,11 @@ class _MisPedidosPageState extends State<MisPedidosPage> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    Supabase.instance.client.removeChannel(_realtimeChannel);
+    super.dispose();
   }
 }

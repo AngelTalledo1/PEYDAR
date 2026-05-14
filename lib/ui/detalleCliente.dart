@@ -14,6 +14,9 @@ class PerfilClienteInfoScreen extends StatefulWidget {
 class _PerfilClienteInfoScreenState extends State<PerfilClienteInfoScreen> {
   List<Map<String, dynamic>> _pedidos = [];
   bool _loading = true;
+  int _deudaAzul = 0;
+  int _deudaCeleste = 0;
+  bool _deudaLoaded = false;
 
   Map<String, dynamic>? get cliente => widget.cliente;
 
@@ -61,7 +64,16 @@ class _PerfilClienteInfoScreenState extends State<PerfilClienteInfoScreen> {
     } catch (_) {
       setState(() => _pedidos = cliente?['pedidos'] is List ? List<Map<String, dynamic>>.from(cliente!['pedidos']) : []);
     } finally {
-      setState(() => _loading = false);
+      // Also load debt if we have the user ID
+      final uid = cliente?['usuario_id'] ?? cliente?['id'] ?? cliente?['usuario'];
+      if (uid != null) {
+        final int? usuarioId = int.tryParse(uid.toString());
+        if (usuarioId != null && !_deudaLoaded) {
+          _deudaLoaded = true;
+          _cargarDeuda(usuarioId);
+        }
+      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -84,6 +96,16 @@ class _PerfilClienteInfoScreenState extends State<PerfilClienteInfoScreen> {
       return 'hace $diff días';
     } catch (_) {
       return cliente?['last_interaction']?.toString() ?? 'sin interacción';
+    }
+  }
+
+  Future<void> _cargarDeuda(int usuarioId) async {
+    final deuda = await OrderService.obtenerDeudaCliente(usuarioId);
+    if (mounted) {
+      setState(() {
+        _deudaAzul = deuda['azul'] ?? 0;
+        _deudaCeleste = deuda['celeste'] ?? 0;
+      });
     }
   }
 
@@ -161,6 +183,22 @@ class _PerfilClienteInfoScreenState extends State<PerfilClienteInfoScreen> {
                   Text('${_totalPedidos()} Pedidos Totales', style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 5),
                   Text('Última interacción: ${_computeLastInteraction()}', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13)),
+                      if (_deudaAzul > 0 || _deudaCeleste > 0) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            _deudaAzul > 0 || _deudaCeleste > 0
+                                ? 'Bidones pendientes: ${_deudaAzul > 0 ? '$_deudaAzul azul' : ''}${_deudaAzul > 0 && _deudaCeleste > 0 ? ', ' : ''}${_deudaCeleste > 0 ? '$_deudaCeleste celeste' : ''}'
+                                : '',
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
                 ],
               ),
             ),
@@ -300,6 +338,16 @@ class _PerfilClienteInfoScreenState extends State<PerfilClienteInfoScreen> {
       selectedItemColor: primaryBlue,
       unselectedItemColor: Colors.grey,
       backgroundColor: Colors.white,
+      onTap: (index) {
+        switch (index) {
+          case 0:
+            Navigator.pushReplacementNamed(context, '/admin/pedidos');
+            break;
+          case 2:
+            Navigator.pushReplacementNamed(context, '/admin/reportes');
+            break;
+        }
+      },
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.local_shipping_outlined), label: 'PEDIDOS'),
         BottomNavigationBarItem(icon: Icon(Icons.people_alt), label: 'CLIENTES'),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:apppeydar/services/order_service.dart';
 import 'package:apppeydar/ui/detalle_pedido.dart';
 
@@ -19,16 +20,31 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _filterEstado = 'TODOS';
+  late final RealtimeChannel _realtimeChannel;
 
   @override
   void initState() {
     super.initState();
     _fetchAdminPedidos();
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    _realtimeChannel = Supabase.instance.client.channel('admin-pedidos');
+    _realtimeChannel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'pedidos',
+      callback: (_) {
+        if (mounted) _fetchAdminPedidos();
+      },
+    ).subscribe();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    Supabase.instance.client.removeChannel(_realtimeChannel);
     super.dispose();
   }
 
@@ -195,9 +211,9 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
         if (p['productos'] != null &&
             p['productos'].toString().trim().isNotEmpty) {
           products = p['productos'].toString().toLowerCase();
-        } else if (p['detalles'] is List) {
+        } else if (p['detalles_pedido'] is List) {
           final detallesList =
-              List<Map<String, dynamic>>.from(p['detalles']);
+              List<Map<String, dynamic>>.from(p['detalles_pedido']);
           products = detallesList
               .map((d) =>
                   (d['producto'] ?? d['name'] ?? d['producto_nombre'] ?? '')
@@ -225,8 +241,8 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
     }).toList();
 
     return visible.map((p) {
-      final nombre = (p['nombre'] ?? '').toString();
-      final apellido = (p['apellido'] ?? '').toString();
+      final nombre = (p['usuario']?['nombre'] ?? '').toString();
+      final apellido = (p['usuario']?['apellido'] ?? '').toString();
       final firstName =
           nombre.isNotEmpty ? nombre.split(' ').first : '';
       final firstSurname =
@@ -240,9 +256,9 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
         if (p['productos'] != null &&
             p['productos'].toString().trim().isNotEmpty) {
           products = p['productos'].toString();
-        } else if (p['detalles'] is List) {
+        } else if (p['detalles_pedido'] is List) {
           final detallesList =
-              List<Map<String, dynamic>>.from(p['detalles']);
+              List<Map<String, dynamic>>.from(p['detalles_pedido']);
           products = detallesList
               .map((d) {
                 final prod =
@@ -450,18 +466,28 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
       unselectedItemColor: Colors.grey,
       backgroundColor: Colors.white,
       type: BottomNavigationBarType.fixed,
+      onTap: (index) {
+        switch (index) {
+          case 1:
+            Navigator.pushReplacementNamed(context, '/admin/clientes');
+            break;
+          case 2:
+            Navigator.pushReplacementNamed(context, '/admin/reportes');
+            break;
+        }
+      },
       items: const [
         BottomNavigationBarItem(
           icon: Icon(Icons.local_shipping),
-          label: 'ORDERS',
+          label: 'PEDIDOS',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.people_alt_outlined),
-          label: 'CLIENTS',
+          label: 'CLIENTES',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.bar_chart_outlined),
-          label: 'REPORTS',
+          label: 'REPORTES',
         ),
       ],
     );

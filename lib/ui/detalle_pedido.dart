@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:apppeydar/services/order_service.dart';
+import 'package:apppeydar/services/boleta_service.dart';
 
 class DetallePedidoScreen extends StatefulWidget {
   final Map<String, dynamic>? pedido;
@@ -19,12 +22,16 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
   bool _updated = false;
   DateTime? _montoSetAt;
 
+  // Pending bottle return data (collected before saving)
+  int? _pendingDevueltosAzul;
+  int? _pendingDevueltosCeleste;
+
   @override
   void initState() {
     super.initState();
     final p = widget.pedido ?? {};
     debugPrint('DetallePedido.initState widget.pedido: $p');
-    _estado = (p['estado'] ?? 'PENDIENTE').toString();
+    _estado = (p['estado'] ?? 'PENDIENTE').toString().toUpperCase();
     final m0 = _montoFromMap(p);
     if (m0 != null) _montoController.text = m0.toString();
     _montoSetAt = _parseMontoSetAtFromMap(p);
@@ -63,7 +70,7 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
       debugPrint('DetallePedido._fetchPedido $id -> response keys: ${p.keys.toList()}');
       setState(() {
         _pedidoData = p;
-        _estado = (p['estado'] ?? _estado).toString();
+        _estado = (p['estado'] ?? _estado).toString().toUpperCase();
         final m1 = _montoFromMap(p);
         if (m1 != null) _montoController.text = m1.toString();
         _montoSetAt = _parseMontoSetAtFromMap(p);
@@ -137,6 +144,26 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
       );
       if (res == null) return;
       monto = res;
+
+      // Collect returned bottles
+      final detalles = _pedidoData?['detalles_pedido'] as List? ?? widget.pedido?['detalles_pedido'] as List? ?? [];
+      int recargaAzul = 0;
+      int recargaCeleste = 0;
+      for (var d in detalles) {
+        final prod = (d['producto'] ?? '').toString();
+        final cant = d['cantidad'] is int ? d['cantidad'] as int : int.tryParse(d['cantidad']?.toString() ?? '0') ?? 0;
+        if (prod == 'Recarga Azul') recargaAzul += cant;
+        if (prod == 'Recarga Celeste') recargaCeleste += cant;
+      }
+
+      if (recargaAzul > 0 || recargaCeleste > 0) {
+        final returned = await _showBidonesDevueltosDialog(recargaAzul, recargaCeleste);
+        if (returned == null) return; // user cancelled -> abort finalization
+        setState(() {
+          _pendingDevueltosAzul = returned['azul'] ?? 0;
+          _pendingDevueltosCeleste = returned['celeste'] ?? 0;
+        });
+      }
     } else {
       final ok = await showDialog<bool?>(
         context: context,
@@ -167,14 +194,17 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
         builder: (_) => const Center(child: CircularProgressIndicator()),
       );
 
-      final pid = (_pedidoData != null && _pedidoData!['id'] != null)
-          ? int.tryParse(_pedidoData!['id'].toString())
-          : (widget.pedido != null
-              ? int.tryParse(
-                  (widget.pedido!['id'] ?? widget.pedido!['pedido_id']).toString())
-              : null);
+      int? pid;
+      if (_pedidoData != null && _pedidoData!['id'] != null) {
+        pid = _pedidoData!['id'] is int
+            ? _pedidoData!['id'] as int
+            : _parsePedidoId(_pedidoData!['id']);
+      } else if (widget.pedido != null) {
+        final rawId = widget.pedido!['id'] ?? widget.pedido!['pedido_id'];
+        pid = rawId is int ? rawId as int : _parsePedidoId(rawId);
+      }
 
-      if (pid == null) throw Exception('ID de pedido inválido');
+      if (pid == null || pid <= 0) throw Exception('ID de pedido inválido');
 
       final Map<String, dynamic> updated = await OrderService.actualizarEstadoPedido(
         pedidoId: pid,
@@ -241,6 +271,23 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
         _targetEstado = null;
       });
 
+      // Save returned bottles if collected
+      if (_pendingDevueltosAzul != null && _pendingDevueltosCeleste != null) {
+        try {
+          await OrderService.actualizarBidonesDevueltos(
+            pedidoId: pid,
+            azul: _pendingDevueltosAzul!,
+            celeste: _pendingDevueltosCeleste!,
+          );
+        } catch (_) {
+          // non-fatal: bottle return data just won't be saved
+        }
+        setState(() {
+          _pendingDevueltosAzul = null;
+          _pendingDevueltosCeleste = null;
+        });
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Pedido actualizado')),
@@ -297,13 +344,17 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
     try {
       showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
 
-      final pid = (_pedidoData != null && _pedidoData!['id'] != null)
-          ? int.tryParse(_pedidoData!['id'].toString())
-          : (widget.pedido != null
-              ? int.tryParse((widget.pedido!['id'] ?? widget.pedido!['pedido_id']).toString())
-              : null);
+      int? pid;
+      if (_pedidoData != null && _pedidoData!['id'] != null) {
+        pid = _pedidoData!['id'] is int
+            ? _pedidoData!['id'] as int
+            : _parsePedidoId(_pedidoData!['id']);
+      } else if (widget.pedido != null) {
+        final rawId = widget.pedido!['id'] ?? widget.pedido!['pedido_id'];
+        pid = rawId is int ? rawId as int : _parsePedidoId(rawId);
+      }
 
-      if (pid == null) throw Exception('ID de pedido inválido');
+      if (pid == null || pid <= 0) throw Exception('ID de pedido inválido');
 
       final Map<String, dynamic> updated = await OrderService.actualizarEstadoPedido(
         pedidoId: pid,
@@ -378,13 +429,31 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
     }
 
     final id = p['id']?.toString() ?? '#WF-9812';
-    final nombre = (p['nombre'] ?? 'Ricardo Hernán Mendoza').toString();
+    final nombreCliente = (p['usuario']?['nombre'] ?? '').toString();
+    final apellidoCliente = (p['usuario']?['apellido'] ?? '').toString();
+    final nombre = [nombreCliente, apellidoCliente]
+        .where((s) => s.isNotEmpty)
+        .join(' ');
     final telefono = (p['telefono_contacto'] ?? '+54 9 11 4455-6677').toString();
     final direccion = (p['direccion_entrega'] ??
             'Calle de las Aguas 1450, Piso 4, Dpto B. San Isidro, Buenos Aires.')
         .toString();
-    final detalles = (p['detalles'] is List)
-        ? List<Map<String, dynamic>>.from(p['detalles'])
+
+    // Coordenadas para el mapa
+    final rawLat = p['latitud'];
+    final rawLon = p['longitud'];
+    double? lat;
+    double? lon;
+    if (rawLat != null) {
+      lat = rawLat is double ? rawLat : double.tryParse(rawLat.toString());
+    }
+    if (rawLon != null) {
+      lon = rawLon is double ? rawLon : double.tryParse(rawLon.toString());
+    }
+    final hasCoords = lat != null && lon != null;
+
+    final detalles = (p['detalles_pedido'] is List)
+        ? List<Map<String, dynamic>>.from(p['detalles_pedido'])
         : [
             {'producto': 'Bidón Azul (20L)', 'desc': 'Recarga de agua mineralizada', 'cantidad': 2},
             {'producto': 'Bidón Celeste (12L)', 'desc': 'Bidón nuevo con dispenser manual', 'cantidad': 2},
@@ -510,35 +579,79 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Container(
-                      height: 110,
-                      margin: const EdgeInsets.only(top: 8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFBDE1FF), Color(0xFFEAF6FF)],
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        height: hasCoords ? 180 : 110,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ),
-                      child: Stack(
-                        children: [
-                          Positioned.fill(child: Container()),
-                          Positioned(
-                            right: 12,
-                            bottom: 12,
-                            child: ElevatedButton.icon(
-                              onPressed: () {},
-                              icon: const Icon(Icons.location_on_outlined),
-                              label: const Text('Ver Ruta'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: const Color(0xFF003DA5),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
+                        child: hasCoords
+                            ? FlutterMap(
+                                options: MapOptions(
+                                  initialCenter: LatLng(lat!, lon!),
+                                  initialZoom: 17.0,
+                                ),
+                                children: [
+                                  TileLayer(
+                                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                    userAgentPackageName: 'com.apppeydar.app',
+                                  ),
+                                  MarkerLayer(
+                                    markers: [
+                                      Marker(
+                                        point: LatLng(lat!, lon!),
+                                        child: const Icon(
+                                          Icons.location_on,
+                                          color: Color(0xFF002855),
+                                          size: 36,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              )
+                            : Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [Color(0xFFBDE1FF), Color(0xFFEAF6FF)],
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.info_outline, color: Color(0xFF003DA5)),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Sin coordenadas de mapa',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF002855),
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            direccion,
+                                            style: const TextStyle(
+                                              color: Colors.grey,
+                                              fontSize: 13,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                          ),
-                        ],
                       ),
                     ),
                   ],
@@ -629,6 +742,26 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
                     ],
                   ),
                 ),
+                // Ver Boleta
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _verBoleta(),
+                    icon: const Icon(Icons.receipt_long, size: 18),
+                    label: const Text('Ver Boleta',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF003DA5),
+                      side: const BorderSide(color: Color(0xFF003DA5)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Botón de registrar devolución — solo en FINALIZADO
+                if (!widget.readOnly) _buildBottleReturnSection(),
                 const SizedBox(height: 18),
               ],
 
@@ -714,10 +847,10 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
 
   Widget _estadoChip(String value) {
     final label = value == 'EN_CAMINO'
-        ? 'en camino'
+        ? 'En camino'
         : value == 'FINALIZADO'
-            ? 'finalizado'
-            : 'pendiente';
+            ? 'Finalizado'
+            : 'Pendiente';
 
     final selected = (_targetEstado != null)
         ? (_targetEstado == value)
@@ -774,6 +907,158 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
     return null;
   }
 
+  Future<Map<String, int>?> _showBidonesDevueltosDialog(int maxAzul, int maxCeleste) async {
+    int devueltosAzul = maxAzul;
+    int devueltosCeleste = maxCeleste;
+    final azulCtrl = TextEditingController(text: maxAzul.toString());
+    final celesteCtrl = TextEditingController(text: maxCeleste.toString());
+
+    final result = await showDialog<Map<String, int>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Registrar bidones devueltos'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Indicá cuántos bidones vacíos devolvió el cliente para este pedido.',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 20),
+              // Azul
+              Row(
+                children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF003DA5),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('Bidón Azul', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  SizedBox(
+                    width: 70,
+                    child: TextField(
+                      controller: azulCtrl,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      decoration: const InputDecoration(
+                        hintText: '0',
+                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (v) {
+                        final parsed = int.tryParse(v);
+                        if (parsed != null) {
+                          setDialogState(() => devueltosAzul = parsed.clamp(0, maxAzul));
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('/ $maxAzul', style: const TextStyle(color: Colors.grey)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Celeste
+              Row(
+                children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF87CEEB),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('Bidón Celeste', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  SizedBox(
+                    width: 70,
+                    child: TextField(
+                      controller: celesteCtrl,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      decoration: const InputDecoration(
+                        hintText: '0',
+                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (v) {
+                        final parsed = int.tryParse(v);
+                        if (parsed != null) {
+                          setDialogState(() => devueltosCeleste = parsed.clamp(0, maxCeleste));
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('/ $maxCeleste', style: const TextStyle(color: Colors.grey)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F4F8),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Color(0xFF003DA5), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _calcularTextoDeuda(maxAzul, maxCeleste, devueltosAzul, devueltosCeleste),
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF002855)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop({
+                'azul': devueltosAzul.clamp(0, maxAzul),
+                'celeste': devueltosCeleste.clamp(0, maxCeleste),
+              }),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF003DA5),
+              ),
+              child: const Text('Confirmar', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    azulCtrl.dispose();
+    celesteCtrl.dispose();
+    return result;
+  }
+
+  String _calcularTextoDeuda(int maxAzul, int maxCeleste, int devAzul, int devCeleste) {
+    final deudaAzul = maxAzul - devAzul;
+    final deudaCeleste = maxCeleste - devCeleste;
+    final partes = <String>[];
+    if (deudaAzul > 0) partes.add('$deudaAzul azul');
+    if (deudaCeleste > 0) partes.add('$deudaCeleste celeste');
+    if (partes.isEmpty) return '✓ No debe bidones';
+    return '⚠ Debe ${partes.join(', ')}';
+  }
+
   bool _canEditMonto() {
     if (widget.readOnly) return false;
     // If no timestamp exists, allow initial set/edit
@@ -782,10 +1067,194 @@ class _DetallePedidoScreenState extends State<DetallePedidoScreen> {
     return diff <= 300; // 5 minutes = 300 seconds
   }
 
+  Future<void> _verBoleta() async {
+    final p = _pedidoData ?? (widget.pedido ?? {});
+    
+    // Get customer name
+    final nombre = (p['usuario']?['nombre'] ?? '').toString();
+    final apellido = (p['usuario']?['apellido'] ?? '').toString();
+    final clienteNombre = [nombre, apellido].where((s) => s.isNotEmpty).join(' ');
+    
+    final direccion = (p['direccion_entrega'] ?? '').toString();
+    final telefono = (p['telefono_contacto'] ?? '').toString();
+    final pedidoId = p['id'] is int ? p['id'] as int : int.tryParse(p['id']?.toString() ?? '0') ?? 0;
+    
+    // Get monto
+    final monto = _montoFromMap(p) ?? 0.0;
+    final montoFinal = monto is double ? monto : double.tryParse(monto.toString()) ?? 0.0;
+    
+    // Get detalles
+    final List<Map<String, dynamic>> detalles = ((p['detalles_pedido'] as List?) ?? []).cast<Map<String, dynamic>>();
+    
+    // Format date
+    final rawFecha = (p['fecha_pedido'] ?? '').toString();
+    String fecha = rawFecha;
+    try {
+      final dt = DateTime.parse(rawFecha).toLocal();
+      fecha = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+    } catch (_) {}
+    
+    await BoletaService.verBoleta(
+      pedidoId: pedidoId,
+      clienteNombre: clienteNombre.isNotEmpty ? clienteNombre : 'Cliente',
+      direccion: direccion,
+      telefono: telefono,
+      detalles: detalles,
+      montoFinal: montoFinal,
+      fecha: fecha,
+    );
+  }
+
   String _initials(String full) {
     final parts = full.split(' ').where((s) => s.isNotEmpty).toList();
     if (parts.isEmpty) return '';
     if (parts.length == 1) return parts[0][0];
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  Widget _buildBottleReturnSection() {
+    final p = _pedidoData ?? (widget.pedido ?? {});
+    final detalles = p['detalles_pedido'] as List? ?? [];
+    
+    // Calculate recarga quantities for this order
+    int recargaAzul = 0;
+    int recargaCeleste = 0;
+    for (var d in detalles) {
+      final prod = (d['producto'] ?? '').toString();
+      final cant = d['cantidad'] is int ? d['cantidad'] as int : int.tryParse(d['cantidad']?.toString() ?? '0') ?? 0;
+      if (prod == 'Recarga Azul') recargaAzul += cant;
+      if (prod == 'Recarga Celeste') recargaCeleste += cant;
+    }
+    
+    if (recargaAzul == 0 && recargaCeleste == 0) return const SizedBox.shrink();
+    
+    final returnedAzul = p['bidones_devueltos_azul'] is int
+        ? p['bidones_devueltos_azul'] as int
+        : int.tryParse(p['bidones_devueltos_azul']?.toString() ?? '0') ?? 0;
+    final returnedCeleste = p['bidones_devueltos_celeste'] is int
+        ? p['bidones_devueltos_celeste'] as int
+        : int.tryParse(p['bidones_devueltos_celeste']?.toString() ?? '0') ?? 0;
+    
+    final deudaAzul = (recargaAzul - returnedAzul).clamp(0, 999);
+    final deudaCeleste = (recargaCeleste - returnedCeleste).clamp(0, 999);
+    
+    final partes = <String>[];
+    if (deudaAzul > 0) partes.add('$deudaAzul azul');
+    if (deudaCeleste > 0) partes.add('$deudaCeleste celeste');
+    
+    final tieneDeuda = partes.isNotEmpty;
+    
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: tieneDeuda ? const Color(0xFFFFF3E0) : const Color(0xFFF1F4F8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: tieneDeuda ? const Color(0xFFFFB74D) : const Color(0xFFE0E0E0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                tieneDeuda ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                size: 18,
+                color: tieneDeuda ? const Color(0xFFE65100) : const Color(0xFF16A34A),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Bidones del pedido',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Recarga: $recargaAzul azul, $recargaCeleste celeste  |  Devueltos: $returnedAzul azul, $returnedCeleste celeste',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          if (tieneDeuda) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Pendiente: ${partes.join(', ')}',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFBF360C),
+              ),
+            ),
+          ],
+          if (!widget.readOnly) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _registrarDevolucion(
+                  recargaAzul, recargaCeleste, returnedAzul, returnedCeleste,
+                ),
+                icon: const Icon(Icons.replay, size: 16),
+                label: Text(
+                  tieneDeuda ? 'Registrar devolución' : 'Actualizar devolución',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF003DA5),
+                  side: const BorderSide(color: Color(0xFF003DA5)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _registrarDevolucion(int recargaAzul, int recargaCeleste, int returnedAzul, int returnedCeleste) async {
+    // Calculate remaining available returns
+    final availableAzul = recargaAzul - returnedAzul;
+    final availableCeleste = recargaCeleste - returnedCeleste;
+    
+    final result = await _showBidonesDevueltosDialog(recargaAzul, recargaCeleste);
+    if (result == null || !mounted) return;
+    
+    int? pid;
+    if (_pedidoData != null && _pedidoData!['id'] != null) {
+      pid = _pedidoData!['id'] is int
+          ? _pedidoData!['id'] as int
+          : _parsePedidoId(_pedidoData!['id']);
+    } else if (widget.pedido != null) {
+      final rawId = widget.pedido!['id'] ?? widget.pedido!['pedido_id'];
+      pid = rawId is int ? rawId as int : _parsePedidoId(rawId);
+    }
+    if (pid == null || pid <= 0) return;
+    
+    try {
+      await OrderService.actualizarBidonesDevueltos(
+        pedidoId: pid,
+        azul: result['azul'] ?? 0,
+        celeste: result['celeste'] ?? 0,
+      );
+      
+      // Refresh pedido data
+      final fresh = await OrderService.obtenerPedido(pid);
+      if (mounted) {
+        setState(() {
+          _pedidoData = fresh;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Devolución registrada correctamente')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
   }
 }
