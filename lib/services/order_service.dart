@@ -1,163 +1,209 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'api_config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrderResult {
   final bool success;
   final int? pedidoId;
   final String message;
 
-  const OrderResult({
+  OrderResult({
     required this.success,
     this.pedidoId,
     required this.message,
   });
 
-  factory OrderResult.success(int pedidoId, String message) {
-    return OrderResult(success: true, pedidoId: pedidoId, message: message);
+  factory OrderResult.success(int id, String msg) {
+    return OrderResult(success: true, pedidoId: id, message: msg);
   }
 
-  factory OrderResult.failure(String message) {
-    return OrderResult(success: false, pedidoId: null, message: message);
+  factory OrderResult.failure(String msg) {
+    return OrderResult(success: false, message: msg);
   }
 }
 
 class OrderService {
-  static String get baseUrl => ApiConfig.baseUrl;
+  static final supabase = Supabase.instance.client;
 
-  static const String apiKey = 'peydar_api_2024_secure_key';
-
+  // 🔥 GUARDAR PEDIDO
   static Future<OrderResult> guardarPedido({
     required int usuarioId,
     required String direccion,
     required String telefono,
+    String tipoPedido = 'standard',
+    String colorBidon = '',
     required List<Map<String, dynamic>> detalles,
+    double? latitud,
+    double? longitud,
   }) async {
     try {
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/guardar_pedido'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode({
-              'api_key': apiKey,
-              'usuario_id': usuarioId,
-              'direccion': direccion,
-              'telefono': telefono,
-              'detalles': detalles,
-            }),
-          )
-          .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () => throw Exception(
-              'Timeout: El servidor tardó demasiado en responder. Verifica tu conexión y la URL del servidor.',
-            ),
-          );
+      // 1. Insertar pedido
+     final pedidoResponse = await supabase
+    .from('pedidos')
+    .insert({
+      'usuario_id': usuarioId,
+      'direccion_entrega': direccion,
+      'telefono_contacto': telefono,
+      'tipo_pedido': tipoPedido,
+      'color_bidon': colorBidon,
+      'estado': 'PENDIENTE',
+      'latitud': latitud,
+      'longitud': longitud,
+    })
+    .select()
+    .maybeSingle();
 
-      if (response.statusCode != 200) {
-        // Intentar decodificar el cuerpo de respuesta para mostrar el mensaje del servidor
-        String serverMsg = 'Error del servidor (${response.statusCode}). Por favor intenta de nuevo.';
-        try {
-          final Map<String, dynamic> err = jsonDecode(response.body);
-          if (err['message'] != null) serverMsg = err['message'].toString();
-          else if (err['error'] != null) serverMsg = err['error'].toString();
-        } catch (_) {}
+if (pedidoResponse == null) {
+  throw Exception('No se pudo crear el pedido');
+}
 
-        return OrderResult.failure(serverMsg);
+final pedidoId = pedidoResponse['id'];
+
+      // 2. Insertar detalles
+      for (var item in detalles) {
+        await supabase.from('detalles_pedido').insert({
+          'pedido_id': pedidoId,
+          'producto': '${item['tipo']} ${item['color']}',
+          'cantidad': item['cantidad'],
+        });
       }
 
-      final Map<String, dynamic> data = jsonDecode(response.body);
-      if (data['status'] != 'success' || data['pedido_id'] == null) {
-        return OrderResult.failure(
-          data['message'] ??
-              'No se pudo guardar el pedido. Verifica los datos e intenta de nuevo.',
-        );
-      }
-
-      final int pedidoId = int.tryParse(data['pedido_id'].toString()) ?? 0;
-      if (pedidoId <= 0) {
-        return OrderResult.failure('ID de pedido inválido recibido del servidor.');
-      }
-
-      return OrderResult.success(
-        pedidoId,
-        data['message'] ?? 'Pedido guardado correctamente',
-      );
-    } catch (error) {
-      final message = error.toString();
-      if (message.contains('SocketException') || message.contains('Connection refused')) {
-        return OrderResult.failure(
-          'Error de conexión: No se puede alcanzar el servidor. Verifica la URL y tu conexión.',
-        );
-      }
-      return OrderResult.failure('Error de conexión: $message');
+      return OrderResult.success(pedidoId, 'Pedido guardado correctamente');
+    } catch (e) {
+      return OrderResult.failure('Error: ${e.toString()}');
     }
   }
 
+  // 🔥 OBTENER PEDIDOS DEL CLIENTE
   static Future<List<Map<String, dynamic>>> obtenerPedidos(int usuarioId) async {
-    final uri = Uri.parse('$baseUrl/mis_pedidos?usuario_id=$usuarioId');
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
-    if (response.statusCode != 200) {
-      throw Exception('Error obteniendo pedidos: ${response.statusCode}');
-    }
-    final Map<String, dynamic> data = jsonDecode(response.body);
-    if (data['status'] != 'success' || data['pedidos'] == null) {
-      throw Exception(data['message'] ?? 'Respuesta inválida al obtener pedidos');
-    }
-    final List<dynamic> raw = data['pedidos'];
-    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final data = await supabase
+        .from('pedidos')
+        .select('*, usuario(nombre, apellido), detalles_pedido(*)')
+        .eq('usuario_id', usuarioId)
+        .order('created_at', ascending: false);
+
+    return List<Map<String, dynamic>>.from(data);
   }
 
+  // 🔥 OBTENER TODOS (ADMIN)
   static Future<List<Map<String, dynamic>>> obtenerPedidosAdmin() async {
-    final uri = Uri.parse('$baseUrl/admin/pedidos');
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
-    if (response.statusCode != 200) {
-      throw Exception('Error obteniendo pedidos admin: ${response.statusCode}');
-    }
-    final Map<String, dynamic> data = jsonDecode(response.body);
-    if (data['status'] != 'success' || data['pedidos'] == null) {
-      throw Exception(data['message'] ?? 'Respuesta inválida al obtener pedidos admin');
-    }
-    final List<dynamic> raw = data['pedidos'];
-    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final data = await supabase
+        .from('pedidos')
+        .select('*, usuario(nombre, apellido), detalles_pedido(*)')
+        .order('created_at', ascending: false);
+
+    return List<Map<String, dynamic>>.from(data);
   }
 
-  static Future<Map<String, dynamic>> obtenerPedido(int pedidoId) async {
-    final uri = Uri.parse('$baseUrl/pedido?id=$pedidoId');
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
-    if (response.statusCode != 200) {
-      throw Exception('Error obteniendo pedido: ${response.statusCode}');
+  // 🔥 OBTENER REPORTES (ADMIN) — filtro por fecha y cliente
+  static Future<List<Map<String, dynamic>>> obtenerReportes({
+    DateTime? desde,
+    DateTime? hasta,
+    int? usuarioId,
+  }) async {
+    // Build query with dynamic for type flexibility (filter vs transform builders)
+    dynamic query = supabase
+        .from('pedidos')
+        .select('*, usuario(nombre, apellido), detalles_pedido(*)');
+
+    if (desde != null) {
+      query = query.gte('created_at', desde.toUtc().toIso8601String());
     }
-    final Map<String, dynamic> data = jsonDecode(response.body);
-    if (data['status'] != 'success' || data['pedido'] == null) {
-      throw Exception(data['message'] ?? 'Respuesta inválida al obtener pedido');
+    if (hasta != null) {
+      query = query.lte('created_at', hasta.toUtc().toIso8601String());
     }
-    return Map<String, dynamic>.from(data['pedido'] as Map);
+    if (usuarioId != null) {
+      query = query.eq('usuario_id', usuarioId);
+    }
+
+    query = query.order('created_at', ascending: false);
+    final data = await query;
+    return List<Map<String, dynamic>>.from(data);
   }
 
+  // 🔥 ACTUALIZAR ESTADO Y (opcional) MONTO — devuelve el registro actualizado
   static Future<Map<String, dynamic>> actualizarEstadoPedido({
     required int pedidoId,
     required String estado,
     double? montoFinal,
   }) async {
-    final uri = Uri.parse('$baseUrl/pedido/actualizar');
-    final body = {
-      'api_key': apiKey,
-      'pedido_id': pedidoId,
-      'estado': estado,
-    };
-    if (montoFinal != null) body['monto_final'] = montoFinal;
+    final updates = <String, dynamic>{'estado': estado};
+    if (montoFinal != null) {
+      updates['monto_final'] = montoFinal;
+      updates['monto_final_set_at'] = DateTime.now().toUtc().toIso8601String();
+    }
 
-    final response = await http.post(uri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(body)).timeout(const Duration(seconds: 10));
-    if (response.statusCode != 200) {
-      throw Exception('Error actualizando pedido: ${response.statusCode}');
+    final resp = await supabase
+        .from('pedidos')
+        .update(updates)
+        .eq('id', pedidoId)
+        .select()
+        .maybeSingle();
+
+    if (resp == null) throw Exception('Error actualizando pedido: $pedidoId');
+    return Map<String, dynamic>.from(resp);
+  }
+
+  // 🔥 OBTENER UN PEDIDO
+  static Future<Map<String, dynamic>> obtenerPedido(int pedidoId) async {
+    final data = await supabase
+        .from('pedidos')
+        .select('*, usuario(nombre, apellido), detalles_pedido(*)')
+        .eq('id', pedidoId)
+        .maybeSingle();
+
+    if (data == null) throw Exception('Pedido no encontrado: $pedidoId');
+    return Map<String, dynamic>.from(data);
+  }
+
+  // Save returned bottles when finalizing
+  static Future<void> actualizarBidonesDevueltos({
+    required int pedidoId,
+    required int azul,
+    required int celeste,
+  }) async {
+    await supabase
+        .from('pedidos')
+        .update({
+          'bidones_devueltos_azul': azul,
+          'bidones_devueltos_celeste': celeste,
+        })
+        .eq('id', pedidoId);
+  }
+
+  // Get total debt for a customer
+  static Future<Map<String, int>> obtenerDeudaCliente(int usuarioId) async {
+    final pedidos = await supabase
+        .from('pedidos')
+        .select('*, detalles_pedido(*)')
+        .eq('usuario_id', usuarioId);
+
+    int deudaAzul = 0;
+    int deudaCeleste = 0;
+
+    for (var pedido in pedidos) {
+      final detalles = pedido['detalles_pedido'] as List? ?? [];
+      int recargaAzul = 0;
+      int recargaCeleste = 0;
+
+      for (var detalle in detalles) {
+        final producto = (detalle['producto'] ?? '').toString();
+        final cantidad = detalle['cantidad'] is int
+            ? detalle['cantidad'] as int
+            : int.tryParse(detalle['cantidad']?.toString() ?? '0') ?? 0;
+        if (producto == 'Recarga Azul') recargaAzul += cantidad;
+        if (producto == 'Recarga Celeste') recargaCeleste += cantidad;
+      }
+
+      final devueltosAzul = pedido['bidones_devueltos_azul'] is int
+          ? pedido['bidones_devueltos_azul'] as int
+          : int.tryParse(pedido['bidones_devueltos_azul']?.toString() ?? '0') ?? 0;
+      final devueltosCeleste = pedido['bidones_devueltos_celeste'] is int
+          ? pedido['bidones_devueltos_celeste'] as int
+          : int.tryParse(pedido['bidones_devueltos_celeste']?.toString() ?? '0') ?? 0;
+
+      deudaAzul += (recargaAzul - devueltosAzul).clamp(0, 999);
+      deudaCeleste += (recargaCeleste - devueltosCeleste).clamp(0, 999);
     }
-    final Map<String, dynamic> data = jsonDecode(response.body);
-    if (data['status'] != 'success' || data['pedido'] == null) {
-      throw Exception(data['message'] ?? 'Respuesta inválida al actualizar pedido');
-    }
-    return Map<String, dynamic>.from(data['pedido'] as Map);
+
+    return {'azul': deudaAzul, 'celeste': deudaCeleste};
   }
 }

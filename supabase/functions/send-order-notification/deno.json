@@ -1,0 +1,10 @@
+{
+  "name": "send-order-notification",
+  "version": "1.0.0",
+  "imports": {
+    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}

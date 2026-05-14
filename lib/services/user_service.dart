@@ -1,25 +1,45 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'api_config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class UserService {
-  static const String _apiKey = 'peydar_api_2024_secure_key';
+  static final supabase = Supabase.instance.client;
 
-  // ─── OBTENER CLIENTES ──────────────────────────────────────────────────────
-  /// Obtiene todos los usuarios de tipo 'cliente' con su último pedido.
+  // 🔥 OBTENER CLIENTES
   static Future<List<Map<String, dynamic>>> obtenerClientes() async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/admin/clientes');
-    final resp = await http.get(uri).timeout(const Duration(seconds: 10));
-    if (resp.statusCode != 200) {
-      throw Exception('Error fetching clientes: ${resp.statusCode}');
-    }
-    final body = json.decode(resp.body) as Map<String, dynamic>;
-    final clientes = (body['clientes'] as List?) ?? [];
-    return clientes.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final data = await supabase
+        .from('usuario')
+        .select()
+        .eq('tipo_usuario', 'cliente')
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(data);
   }
 
-  // ─── CREAR CLIENTE ─────────────────────────────────────────────────────────
-  /// Crea un nuevo cliente en el backend.
+  // 🔥 CREAR ADMINISTRADOR (solo otro admin puede hacerlo, validado en RPC)
+  static Future<Map<String, dynamic>> crearAdmin({
+    required String usuario,
+    required String nombre,
+    required String apellido,
+    required String telefono,
+    required String password,
+    String? gmail,
+    String? direccion,
+  }) async {
+    try {
+      final res = await supabase.rpc('crear_admin_completo', params: {
+        'p_dni': usuario,
+        'p_password': password,
+        'p_nombre': nombre,
+        'p_apellido': apellido,
+        'p_telefono': telefono,
+        'p_gmail': gmail,
+        'p_direccion': direccion,
+      });
+      return Map<String, dynamic>.from(res);
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
+
+  // 🔥 CREAR CLIENTE usando función SQL (no afecta la sesión del admin)
   static Future<Map<String, dynamic>> crearCliente({
     required String usuario,
     required String nombre,
@@ -29,124 +49,113 @@ class UserService {
     String? gmail,
     String? direccion,
   }) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/admin/usuario');
-    final body = {
-      'api_key': _apiKey,
-      'usuario': usuario,
-      'nombre': nombre,
-      'apellido': apellido,
-      'telefono': telefono,
-      'password': password,
-      'gmail': gmail,
-      'direccion': direccion,
-      'tipo_usuario': 'cliente',
-    };
-
-    final resp = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode(body),
-    ).timeout(const Duration(seconds: 10));
-
-    if (resp.statusCode != 200 && resp.statusCode != 201) {
-      throw Exception('Error creando cliente: ${resp.statusCode}');
-    }
     try {
-      return json.decode(resp.body) as Map<String, dynamic>;
+      // Usar la función SQL que creamos antes
+      await supabase.rpc('crear_usuario_completo', params: {
+        'p_dni': usuario,
+        'p_password': password,
+        'p_nombre': nombre,
+        'p_apellido': apellido,
+        'p_telefono': telefono,
+        'p_tipo_usuario': 'cliente',
+        'p_gmail': gmail,
+        'p_direccion': direccion,
+      });
+
+      // Obtener el id recién creado
+     final insert = await supabase
+    .from('usuario')
+    .select()
+    .eq('dni', usuario)
+    .maybeSingle();
+
+if (insert == null) {
+  return {
+    'status': 'error',
+    'message': 'Cliente creado pero no encontrado en tabla'
+  };
+}
+
+      return {
+        'status': 'success',
+        'message': 'Cliente creado correctamente',
+        'data': insert,
+      };
     } catch (e) {
-      throw Exception('Respuesta inválida del servidor al crear cliente');
+      return {'status': 'error', 'message': e.toString()};
     }
   }
 
-  // ─── EDITAR CLIENTE ────────────────────────────────────────────────────────
-      /// Activa un cliente (cambia `estado` a 'ACTIVO') usando el campo DNI/usuario.
-      static Future<Map<String, dynamic>> activarCliente({required String dni}) async {
-        // Reusa el endpoint de actualizar para establecer estado
-        final payload = {'usuario': dni, 'estado': 'ACTIVO'};
-        return actualizarCliente(payload);
-      }
-  /// Edita los datos de un cliente existente por su usuario_id.
+  // 🔥 EDITAR CLIENTE
   static Future<Map<String, dynamic>> editarCliente({
-    required dynamic usuarioId,
+    required int usuarioId,
     required String nombre,
     required String apellido,
     required String telefono,
     String? gmail,
     String? direccion,
   }) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/admin/usuario/editar');
-    final body = {
-      'api_key': _apiKey,
-      'usuario_id': usuarioId,
-      'nombre': nombre,
-      'apellido': apellido,
-      'telefono': telefono,
-      'gmail': gmail,
-      'direccion': direccion,
-    };
-
-    final resp = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode(body),
-    ).timeout(const Duration(seconds: 10));
-
-    if (resp.statusCode != 200) {
-      throw Exception('Error editando cliente: ${resp.statusCode}');
-    }
     try {
-      return json.decode(resp.body) as Map<String, dynamic>;
+      final resp = await supabase.from('usuario').update({
+        'nombre': nombre,
+        'apellido': apellido,
+        'telefono': telefono,
+        'gmail': gmail,
+        'direccion': direccion,
+      }).eq('id', usuarioId).select().maybeSingle();
+
+      if (resp == null) {
+        return {'status': 'error', 'message': 'No se pudo actualizar'};
+      }
+      return {'status': 'success', 'message': 'Actualizado', 'data': resp};
     } catch (e) {
-      throw Exception('Respuesta inválida del servidor al editar cliente');
+      return {'status': 'error', 'message': e.toString()};
     }
   }
 
-  // ─── DESACTIVAR CLIENTE ────────────────────────────────────────────────────
-  /// Desactiva un cliente por su DNI/usuario (envía `usuario` al backend).
-  static Future<Map<String, dynamic>> desactivarCliente({required String dni}) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/admin/usuario/desactivar');
-    final body = {
-      'api_key': _apiKey,
-      'usuario': dni,
-    };
-
-    final resp = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode(body),
-    ).timeout(const Duration(seconds: 10));
-
-    if (resp.statusCode != 200) {
-      throw Exception('Error desactivando cliente: ${resp.statusCode}');
-    }
-
+  // 🔥 DESACTIVAR CLIENTE
+  static Future<Map<String, dynamic>> desactivarCliente({
+    int? usuarioId,
+    String? dni,
+  }) async {
     try {
-      return json.decode(resp.body) as Map<String, dynamic>;
+      if (usuarioId != null) {
+        await supabase
+            .from('usuario')
+            .update({'estado': 'INACTIVO'})
+            .eq('id', usuarioId);
+      } else if (dni != null) {
+        await supabase
+            .from('usuario')
+            .update({'estado': 'INACTIVO'})
+            .eq('dni', dni);
+      }
+      return {'status': 'success', 'message': 'Cliente desactivado'};
     } catch (e) {
-      throw Exception('Respuesta inválida del servidor al desactivar cliente');
+      return {'status': 'error', 'message': e.toString()};
     }
   }
 
-  // ─── ACTUALIZAR CLIENTE (genérico) ────────────────────────────────────────
-  /// Actualiza campos genéricos de un cliente. Se espera `usuario_id` en el payload.
-  static Future<Map<String, dynamic>> actualizarCliente(
-      Map<String, dynamic> payload) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/admin/usuario/actualizar');
-    final body = {...payload, 'api_key': _apiKey};
-
-    final resp = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode(body),
-    ).timeout(const Duration(seconds: 10));
-
-    if (resp.statusCode != 200) {
-      throw Exception('Error actualizando cliente: ${resp.statusCode}');
-    }
+  // 🔥 ACTIVAR CLIENTE
+  static Future<Map<String, dynamic>> activarCliente({
+    int? usuarioId,
+    String? dni,
+  }) async {
     try {
-      return json.decode(resp.body) as Map<String, dynamic>;
+      if (usuarioId != null) {
+        await supabase
+            .from('usuario')
+            .update({'estado': 'ACTIVO'})
+            .eq('id', usuarioId);
+      } else if (dni != null) {
+        await supabase
+            .from('usuario')
+            .update({'estado': 'ACTIVO'})
+            .eq('dni', dni);
+      }
+      return {'status': 'success', 'message': 'Cliente activado'};
     } catch (e) {
-      throw Exception('Respuesta inválida del servidor al actualizar cliente');
+      return {'status': 'error', 'message': e.toString()};
     }
   }
 }

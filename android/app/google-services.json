@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "465438701111",
+    "project_id": "peydar-app",
+    "storage_bucket": "peydar-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:465438701111:android:2921d97d0374a2df5931b2",
+        "android_client_info": {
+          "package_name": "com.mabtics.apppeydar"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBoA0C1dLBYHOa9_aNPXKdxIysVixUHSBc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
  
 import 'package:apppeydar/ui/resumenPedido.dart';
+import 'package:apppeydar/ui/mapa_picker_screen.dart';
 
 class RealizarPedidoPage extends StatefulWidget {
   const RealizarPedidoPage({super.key});
@@ -24,6 +25,10 @@ class _RealizarPedidoPageState extends State<RealizarPedidoPage> {
   final TextEditingController _dirController = TextEditingController();
   final TextEditingController _telController = TextEditingController();
 
+  // Coordenadas seleccionadas desde el mapa (opcional)
+  double? _latitud;
+  double? _longitud;
+
   @override
   void initState() {
     super.initState();
@@ -38,7 +43,27 @@ class _RealizarPedidoPageState extends State<RealizarPedidoPage> {
     usuarioId = args?['id'] ?? args?['usuario_id']; // Obtenemos el ID del usuario para la DB
   }
 
-  // 3. NAVEGACIÓN AL RESUMEN DEL PEDIDO
+  // 3. NAVEGACIÓN AL MAPA PICKER
+  Future<void> _abrirMapaPicker() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(builder: (_) => const MapaPickerScreen()),
+    );
+
+    if (result != null && mounted) {
+      final direccion = result['direccion'] as String?;
+      final lat = result['latitud'] as double?;
+      final lng = result['longitud'] as double?;
+
+      setState(() {
+        if (direccion != null) _dirController.text = direccion;
+        _latitud = lat;
+        _longitud = lng;
+      });
+    }
+  }
+
+  // 4. NAVEGACIÓN AL RESUMEN DEL PEDIDO
   void _abrirResumenPedido() {
     if (_dirController.text.isEmpty || _telController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -76,6 +101,8 @@ class _RealizarPedidoPageState extends State<RealizarPedidoPage> {
           direccion: _dirController.text,
           telefono: _telController.text,
           detalles: productos,
+          latitud: _latitud,
+          longitud: _longitud,
         ),
       ),
     );
@@ -251,6 +278,21 @@ class _RealizarPedidoPageState extends State<RealizarPedidoPage> {
           const SizedBox(height: 15),
           _buildSmallField('DIRECCIÓN DE ENTREGA', 'Calle, número, departamento', Icons.location_on, _dirController),
           const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _abrirMapaPicker,
+              icon: const Icon(Icons.map_outlined, size: 18),
+              label: const Text('📍 Seleccionar en mapa',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF003DA5),
+                side: const BorderSide(color: Color(0xFF003DA5)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
           const SizedBox(height: 15),
           _buildSmallField('NÚMERO DE TELÉFONO', '+51', Icons.phone, _telController, digitsOnly: true, maxLength: 9),
         ],

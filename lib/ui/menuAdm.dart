@@ -67,6 +67,16 @@ class MenuAdm extends StatelessWidget {
               actionText: 'Ver análisis',
               route: '/admin/reportes',
             ),
+            _buildActionCard(
+              context: context,
+              icon: Icons.admin_panel_settings_outlined,
+              iconColor: const Color(0xFFE65100),
+              title: 'Crear Administrador',
+              description:
+                  'Registra un nuevo administrador con acceso completo al panel de control del sistema.',
+              actionText: 'Crear ahora',
+              route: '/admin/crear-admin',
+            ),
             const SizedBox(height: 40),
           ],
         ),

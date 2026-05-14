@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:apppeydar/services/order_service.dart';
 
 class InicioCliente extends StatefulWidget {
   const InicioCliente({super.key});
@@ -8,13 +10,48 @@ class InicioCliente extends StatefulWidget {
 }
 
 class _InicioClienteState extends State<InicioCliente> {
+  int? _usuarioId;
+  late final RealtimeChannel _realtimeChannel;
   int _selectedNavIndex = 0;
 
-  static const Color _darkNavy  = Color(0xFF1A2F6B);
-  static const Color _lightBg   = Color.fromARGB(255, 217, 232, 244);
-  static const Color _cardGray  = Color.fromARGB(255, 241, 241, 245);
-  static const Color _iconPurple = Color.fromARGB(255, 208, 216, 247);
-  static const Color _iconGray  = Color(0xFFD0D5DD);
+  int _deudaAzul = 0;
+  int _deudaCeleste = 0;
+  bool _deudaLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    _realtimeChannel = Supabase.instance.client.channel('inicio-cliente');
+    _realtimeChannel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'pedidos',
+      callback: (_) {
+        if (mounted && _usuarioId != null) {
+          _cargarDeuda(_usuarioId!);
+        }
+      },
+    ).subscribe();
+  }
+
+  void _cargarDeuda(int? usuarioId) async {
+    if (usuarioId == null) return;
+    final deuda = await OrderService.obtenerDeudaCliente(usuarioId);
+    if (mounted) {
+      setState(() {
+        _deudaAzul = deuda['azul'] ?? 0;
+        _deudaCeleste = deuda['celeste'] ?? 0;
+      });
+    }
+  }
+
+  static const Color _darkNavy  = Color(0xFF002855);
+  static const Color _lightBg   = Color(0xFFF8FAFC);
+  static const Color _primaryBlue = Color(0xFF003DA5);
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +59,12 @@ class _InicioClienteState extends State<InicioCliente> {
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final String nombre = args?['nombre'] ?? 'Cliente';
     final int? usuarioId = args?['id'] ?? args?['usuario_id'];
+    _usuarioId ??= usuarioId;
+
+    if (usuarioId != null && !_deudaLoaded) {
+      _deudaLoaded = true;
+      _cargarDeuda(usuarioId);
+    }
 
     // Genera iniciales para el avatar (ej: "Juan Pérez" → "JP")
     final String iniciales = nombre
@@ -46,16 +89,19 @@ class _InicioClienteState extends State<InicioCliente> {
                     const SizedBox(height: 16),
                     _buildTopBar(context, iniciales),
                     const SizedBox(height: 32),
-                    _buildGreeting(nombre),
-                    const SizedBox(height: 28),
+                    _buildWelcomeCard(nombre),
+                    const SizedBox(height: 24),
+                    if (_deudaAzul > 0 || _deudaCeleste > 0)
+                      _buildDeudaCard(),
+                    if (_deudaAzul > 0 || _deudaCeleste > 0)
+                      const SizedBox(height: 16),
                     _buildActionCard(
-                      iconBgColor: _iconPurple,
-                      iconColor: _darkNavy,
-                      icon: Icons.local_drink,
+                      icon: Icons.shopping_cart_outlined,
+                      iconColor: const Color(0xFF003DA5),
                       title: 'Realizar pedido',
                       subtitle:
                           'Recibe agua fresca en la puerta de tu hogar de forma rápida y sencilla.',
-                      hasGradient: true,
+                      actionText: 'Acceder ahora',
                       onTap: () {
                         setState(() => _selectedNavIndex = 0);
                         Navigator.pushNamed(
@@ -67,13 +113,12 @@ class _InicioClienteState extends State<InicioCliente> {
                     ),
                     const SizedBox(height: 16),
                     _buildActionCard(
-                      iconBgColor: _iconGray,
-                      iconColor: Colors.grey[700]!,
                       icon: Icons.history,
+                      iconColor: const Color(0xFF00ACC1),
                       title: 'Ver mis pedidos',
                       subtitle:
                           'Consulta el estado de tus entregas actuales y revisa tu historial de compras.',
-                      hasGradient: false,
+                      actionText: 'Explorar lista',
                       onTap: () {
                         setState(() => _selectedNavIndex = 1);
                         Navigator.pushNamed(
@@ -101,7 +146,7 @@ class _InicioClienteState extends State<InicioCliente> {
       children: [
         const Row(
           children: [
-            Icon(Icons.water_drop, color: Color(0xFF3578C4), size: 26),
+            Icon(Icons.water_drop, color: _primaryBlue, size: 26),
             SizedBox(width: 8),
             Text(
               'PEYDAR',
@@ -126,7 +171,7 @@ class _InicioClienteState extends State<InicioCliente> {
                 width: 40,
                 height: 40,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFD8DCE8),
+                  color: Color(0xFFE3F2FD),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -163,7 +208,7 @@ class _InicioClienteState extends State<InicioCliente> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF073F9E),
+              backgroundColor: _primaryBlue,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
@@ -179,90 +224,161 @@ class _InicioClienteState extends State<InicioCliente> {
     );
   }
 
-  Widget _buildGreeting(String nombre) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Hola, $nombre 👋',
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w900,
-            color: _darkNavy,
-            height: 1.1,
+  Widget _buildDeudaCard() {
+    final partes = <String>[];
+    if (_deudaAzul > 0) partes.add('$_deudaAzul azul');
+    if (_deudaCeleste > 0) partes.add('$_deudaCeleste celeste');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFB74D)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: Color(0xFFE65100), size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Bidones pendientes',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Color(0xFFE65100),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Debés ${partes.join(', ')}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFFBF360C),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '¿Qué deseas hacer hoy por tu\nhidratación?',
-          style: TextStyle(
-              fontSize: 15, color: Colors.grey[600], height: 1.45),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWelcomeCard(String nombre) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D47A1),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D47A1).withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bienvenido, $nombre 👋',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            '¿Qué deseas hacer hoy por tu hidratación?',
+            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildActionCard({
-    required Color iconBgColor,
-    required Color iconColor,
     required IconData icon,
+    required Color iconColor,
     required String title,
     required String subtitle,
-    required bool hasGradient,
+    required String actionText,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(24),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: hasGradient
-              ? const LinearGradient(
-                  colors: [
-                    Color(0xFFFFFFFF),
-                    Color(0xFFE8F0FB),
-                    Color(0xFFD6E8F8),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: hasGradient ? null : _cardGray,
-          boxShadow: hasGradient
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : [],
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                  color: iconBgColor, shape: BoxShape.circle),
-              child: Icon(icon, color: iconColor, size: 26),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Color(0xFF002855),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: _darkNavy),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
               subtitle,
-              style: TextStyle(
-                  fontSize: 14, color: Colors.grey[600], height: 1.45),
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Text(
+                  actionText,
+                  style: const TextStyle(
+                    color: Color(0xFF003DA5),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                const Icon(
+                  Icons.arrow_forward,
+                  color: Color(0xFF003DA5),
+                  size: 14,
+                ),
+              ],
             ),
           ],
         ),
@@ -340,7 +456,7 @@ class _InicioClienteState extends State<InicioCliente> {
             : const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: isActive
-              ? const Color(0xFFE8EFF8)
+              ? const Color(0xFFE3F2FD)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(30),
         ),
@@ -362,5 +478,11 @@ class _InicioClienteState extends State<InicioCliente> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    Supabase.instance.client.removeChannel(_realtimeChannel);
+    super.dispose();
   }
 }
